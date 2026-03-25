@@ -10,7 +10,9 @@ import logging
 import os
 import re
 import tempfile
+import threading
 from functools import lru_cache
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, Optional, Tuple
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -115,6 +117,30 @@ TTS_FALLBACK_CODES = {
     "zh-CN",
     "zh-TW",
 }
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    """Tiny health endpoint for Render/UptimeRobot."""
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path in {"/", "/health"}:
+            body = b"ok"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        body = b"not found"
+        self.send_response(404)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        logger.debug("Health server: " + format, *args)
 
 
 @lru_cache(maxsize=1)
@@ -775,6 +801,29 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
         await update.effective_message.reply_text("An unexpected error happened. Please try again.")
 
 
+def start_health_server() -> None:
+    port_value = os.getenv("PORT")
+    if not port_value:
+        logger.info("PORT is not set. Health server not started.")
+        return
+
+    try:
+        port = int(port_value)
+    except ValueError:
+        logger.warning("Invalid PORT value: %s", port_value)
+        return
+
+    def _serve() -> None:
+        try:
+            server = HTTPServer(("0.0.0.0", port), HealthHandler)
+            logger.info("Health server listening on port %s", port)
+            server.serve_forever()
+        except Exception as exc:  # pragma: no cover
+            logger.exception("Health server failed: %s", exc)
+
+    threading.Thread(target=_serve, daemon=True).start()
+
+
 def build_application() -> Application:
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN is not set. Add it in environment variables.")
@@ -819,6 +868,7 @@ def build_application() -> Application:
 
 
 def main() -> None:
+    start_health_server()
     app = build_application()
     logger.info("Bot is starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
