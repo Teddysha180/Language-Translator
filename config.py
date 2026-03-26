@@ -25,24 +25,24 @@ TRANSLATION_HISTORY_LIMIT = 10
 SAVED_TRANSLATIONS_LIMIT = 20
 
 WELCOME_TEXT = (
-    "Your translator is ready.\n\n"
-    "Send any text to translate instantly.\n"
-    "Use Language Setup if you want to change the default languages."
+    "Professional translation, ready whenever you are.\n\n"
+    "Send a message and the bot will translate it right away.\n"
+    "Open Preferences if you want to change your default languages."
 )
 
 HELP_TEXT = (
-    "Quick help\n\n"
+    "How to use the translator\n\n"
     "1. Send a word, sentence, paragraph, or voice note.\n"
-    "2. Use From Language or To Language when you want to switch languages.\n"
-    "3. Tap Swap Languages to reverse the direction.\n"
-    "4. Use Copy Text or Speak Result after each translation.\n\n"
+    "2. Use From or To to change the language pair.\n"
+    "3. Tap Swap to reverse the translation direction.\n"
+    "4. Tap Speak Result when audio is available for the selected target language.\n\n"
     "Commands:\n"
-    "/start - open the quick translator\n"
-    "/translate - open translate mode\n"
-    "/settings - save your default languages\n"
-    "/help - show this help text\n"
-    "/cancel - return home\n\n"
-    f"Limit: keep text under {MAX_INPUT_TEXT_LENGTH:,} characters."
+    "/start - open the translator\n"
+    "/translate - open translation mode\n"
+    "/settings - update your default languages\n"
+    "/help - show this guide\n"
+    "/cancel - return to the main menu\n\n"
+    f"Text limit: keep each message under {MAX_INPUT_TEXT_LENGTH:,} characters."
 )
 
 if DEFAULT_TARGET_LANG not in ALL_LANGUAGES:

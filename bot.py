@@ -69,7 +69,7 @@ from keyboards import (
     translation_panel_keyboard,
     translation_result_inline_keyboard,
 )
-from languages import ALL_LANGUAGES, TRANSLATOR_CODE_ALIASES
+from languages import ALL_LANGUAGES, TRANSLATOR_CODE_ALIASES, display_language_name
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
@@ -82,7 +82,8 @@ SETTINGS_STATE = 2
 
 db = Database(DB_PATH)
 
-FORCED_UNSUPPORTED_TARGET_LANGS = {"ti", "aa", "ss", "wal", "sid", "gez", "har", "gur", "kun", "byn", "aho"}
+FORCED_UNSUPPORTED_TARGET_LANGS = {"aa", "ss", "wal", "sid", "gez", "har", "gur", "kun", "byn", "aho"}
+ALWAYS_ALLOW_TARGET_LANGS = {"ti"}
 INVISIBLE_TEXT_RE = re.compile(r"[\s\u200b\u200c\u200d\u200e\u200f\u2060\ufeff]+")
 
 SPEECH_LANGUAGE_HINTS = {
@@ -179,6 +180,10 @@ def lang_name(code: str) -> str:
     return ALL_LANGUAGES.get(code, code)
 
 
+def ui_lang_name(code: str) -> str:
+    return display_language_name(code)
+
+
 def is_effectively_empty_text(text: str) -> bool:
     if text is None:
         return True
@@ -192,6 +197,8 @@ def is_supported_source_lang(code: str) -> bool:
 def is_supported_target_lang(code: str) -> bool:
     if code in FORCED_UNSUPPORTED_TARGET_LANGS:
         return False
+    if code in ALWAYS_ALLOW_TARGET_LANGS:
+        return True
     return code != "auto" and resolve_translator_code(code) is not None
 
 
@@ -337,10 +344,10 @@ async def show_onboarding_if_needed(update: Update, user_id: int) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
             (
-                "Welcome in.\n\n"
-                "1. Send a text or voice note.\n"
-                "2. Change From or To anytime.\n"
-                "3. Listen to the result when speech is available."
+                "Welcome to your translation workspace.\n\n"
+                "1. Send text or a voice note at any time.\n"
+                "2. Change From or To whenever you need a new language pair.\n"
+                "3. Use Speak Result when voice playback is supported."
             ),
             reply_markup=onboarding_keyboard(),
         )
@@ -350,16 +357,15 @@ async def show_onboarding_if_needed(update: Update, user_id: int) -> None:
 async def show_translate_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     source, target = ensure_user_data_langs(context, user_id)
-    src_name = escape_markdown(lang_name(source), version=1)
-    tgt_name = escape_markdown(lang_name(target), version=1)
+    src_name = escape_markdown(ui_lang_name(source), version=1)
+    tgt_name = escape_markdown(ui_lang_name(target), version=1)
     await send_markdown(
         update,
         (
-            "*Quick Translate*\n\n"
-            f"From: *{src_name}*\n"
-            f"To: *{tgt_name}*\n\n"
-            "Send text or a voice note now.\n"
-            "Use the menu below to switch languages fast."
+            "*Translation Studio*\n\n"
+            f"*From:* {src_name}\n"
+            f"*To:* {tgt_name}\n\n"
+            "Send any text now and the bot will translate it immediately."
         ),
         reply_markup=translation_panel_keyboard(source, target),
     )
@@ -371,9 +377,9 @@ async def show_settings_overview(update: Update, user_id: int) -> int:
     await send_markdown(
         update,
         (
-            "*Language Setup*\n\n"
-            f"Default from: *{escape_markdown(lang_name(source), version=1)}*\n"
-            f"Default to: *{escape_markdown(lang_name(target), version=1)}*"
+            "*Preferences*\n\n"
+            f"*Default from:* {escape_markdown(ui_lang_name(source), version=1)}\n"
+            f"*Default to:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
         settings_keyboard(source, target),
     )
@@ -410,6 +416,8 @@ async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     if text == MENU_HELP:
         await help_command(update, context)
         return None
+    if text:
+        await run_translation_flow(update, context, text)
     return None
 
 
@@ -542,16 +550,16 @@ async def send_translation_result(
 
     detected_line = ""
     if source_lang == "auto" and detected_lang:
-        detected_line = f"<b>Detected:</b> {html.escape(lang_name(detected_lang))}\n"
+        detected_line = f"<b>Detected:</b> {html.escape(ui_lang_name(detected_lang))}\n"
 
     result_text = (
-        "<b>Done</b>\n\n"
+        "<b>Translation Ready</b>\n\n"
         f"{detected_line}"
-        f"<b>From:</b> {html.escape(lang_name(source_lang))}\n"
-        f"<b>To:</b> {html.escape(lang_name(target_lang))}\n\n"
-        "<b>Original</b>\n"
+        f"<b>From:</b> {html.escape(ui_lang_name(source_lang))}\n"
+        f"<b>To:</b> {html.escape(ui_lang_name(target_lang))}\n\n"
+        "<b>Original text</b>\n"
         f"<code>{html.escape(text[:700])}</code>\n\n"
-        "<b>Translation</b>\n"
+        "<b>Translated text</b>\n"
         f"<code>{html.escape(translated[:700])}</code>"
     )
     result_actions = translation_result_inline_keyboard()
@@ -634,7 +642,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["lang_menu_mode"] = "tr_src"
         await send_markdown(
             update,
-            "Choose source language:",
+            "Choose the language you are translating from:",
             language_menu_keyboard(selectable_languages(include_auto=True), include_auto=True),
         )
         return TRANSLATE_STATE
@@ -643,14 +651,14 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["lang_menu_mode"] = "tr_tgt"
         await send_markdown(
             update,
-            "Choose target language:",
+            "Choose the language you are translating to:",
             language_menu_keyboard(selectable_languages(include_auto=False, for_target=True), include_auto=False),
         )
         return TRANSLATE_STATE
 
     if text == TR_SWAP:
         if source_lang == "auto":
-            await send_markdown(update, "Swap works after you choose a specific source language.")
+            await send_markdown(update, "Choose a specific source language before using Swap.")
             return TRANSLATE_STATE
         context.user_data["source_lang"], context.user_data["target_lang"] = target_lang, source_lang
         return await show_translate_prompt(update, context)
@@ -663,7 +671,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
             update,
             (
                 "*Tips*\n\n"
-                "Send text directly to translate it.\n"
+                "Send text directly and translation starts right away.\n"
                 "Voice notes also work when speech tools are installed.\n"
                 "Use Speak Result when audio is available for the target language."
             ),
@@ -793,9 +801,9 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     await send_markdown(
         update,
         (
-            "*Saved*\n\n"
-            f"Default from: *{escape_markdown(lang_name(source), version=1)}*\n"
-            f"Default to: *{escape_markdown(lang_name(target), version=1)}*"
+            "*Preferences Updated*\n\n"
+            f"*Default from:* {escape_markdown(ui_lang_name(source), version=1)}\n"
+            f"*Default to:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
         settings_keyboard(source, target),
     )
@@ -869,6 +877,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(translate_conv)
     app.add_handler(settings_conv)
+    app.add_handler(MessageHandler(filters.VOICE, voice_translation_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_text_handler))
     app.add_error_handler(global_error_handler)
     return app

@@ -88,6 +88,80 @@ ALL_LANGUAGES: Dict[str, str] = {
     **WORLD_LANGUAGES,
 }
 
+LANGUAGE_FLAGS: Dict[str, str] = {
+    "auto": "🌍",
+    "am": "🇪🇹",
+    "om": "🇪🇹",
+    "ti": "🇪🇷",
+    "tig": "🇪🇷",
+    "so": "🇸🇴",
+    "aa": "🇪🇹",
+    "ss": "🇪🇹",
+    "wal": "🇪🇹",
+    "sid": "🇪🇹",
+    "gez": "📜",
+    "har": "🇪🇹",
+    "gur": "🇪🇹",
+    "gam": "🇪🇹",
+    "ktb": "🇪🇹",
+    "dwr": "🇪🇹",
+    "anu": "🇪🇹",
+    "nrb": "🇪🇷",
+    "kun": "🇪🇷",
+    "byn": "🇪🇷",
+    "aho": "🇪🇹",
+    "en": "🇬🇧",
+    "ar": "🇸🇦",
+    "fr": "🇫🇷",
+    "es": "🇪🇸",
+    "de": "🇩🇪",
+    "it": "🇮🇹",
+    "pt": "🇵🇹",
+    "ru": "🇷🇺",
+    "tr": "🇹🇷",
+    "nl": "🇳🇱",
+    "sv": "🇸🇪",
+    "pl": "🇵🇱",
+    "hi": "🇮🇳",
+    "bn": "🇧🇩",
+    "ta": "🇮🇳",
+    "te": "🇮🇳",
+    "ml": "🇮🇳",
+    "kn": "🇮🇳",
+    "mr": "🇮🇳",
+    "gu": "🇮🇳",
+    "pa": "🇮🇳",
+    "ur": "🇵🇰",
+    "fa": "🇮🇷",
+    "he": "🇮🇱",
+    "el": "🇬🇷",
+    "uk": "🇺🇦",
+    "cs": "🇨🇿",
+    "ro": "🇷🇴",
+    "hu": "🇭🇺",
+    "bg": "🇧🇬",
+    "sr": "🇷🇸",
+    "hr": "🇭🇷",
+    "sk": "🇸🇰",
+    "sl": "🇸🇮",
+    "lt": "🇱🇹",
+    "lv": "🇱🇻",
+    "et": "🇪🇪",
+    "da": "🇩🇰",
+    "no": "🇳🇴",
+    "fi": "🇫🇮",
+    "zh-CN": "🇨🇳",
+    "zh-TW": "🇹🇼",
+    "ja": "🇯🇵",
+    "ko": "🇰🇷",
+    "th": "🇹🇭",
+    "vi": "🇻🇳",
+    "id": "🇮🇩",
+    "ms": "🇲🇾",
+    "tl": "🇵🇭",
+    "sw": "🇰🇪",
+}
+
 # Aliases used to improve interoperability with translation APIs.
 # The bot keeps user-facing codes intact and only maps internally when needed.
 TRANSLATOR_CODE_ALIASES: Dict[str, List[str]] = {
@@ -101,3 +175,12 @@ TRANSLATOR_CODE_ALIASES: Dict[str, List[str]] = {
     "ss": ["ss"],
     "tl": ["tl", "fil"],
 }
+
+
+def language_flag(code: str) -> str:
+    return LANGUAGE_FLAGS.get(code, "🌐")
+
+
+def display_language_name(code: str) -> str:
+    name = ALL_LANGUAGES.get(code, code)
+    return f"{language_flag(code)} {name}"
