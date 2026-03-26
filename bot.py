@@ -122,22 +122,29 @@ TTS_FALLBACK_CODES = {
 class HealthHandler(BaseHTTPRequestHandler):
     """Tiny health endpoint for Render/UptimeRobot."""
 
-    def do_GET(self) -> None:  # noqa: N802
-        if self.path in {"/", "/health"}:
-            body = b"ok"
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        body = b"not found"
-        self.send_response(404)
+    def _write_status(self, code: int, body: bytes, include_body: bool = True) -> None:
+        self.send_response(code)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if include_body:
+            self.wfile.write(body)
+
+    def _is_health_path(self) -> bool:
+        return self.path in {"/", "/health", "/health/"}
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self._is_health_path():
+            self._write_status(200, b"ok")
+            return
+
+        self._write_status(404, b"not found")
+
+    def do_HEAD(self) -> None:  # noqa: N802
+        if self._is_health_path():
+            self._write_status(200, b"ok", include_body=False)
+            return
+        self._write_status(404, b"not found", include_body=False)
 
     def log_message(self, format: str, *args: object) -> None:
         logger.debug("Health server: " + format, *args)
