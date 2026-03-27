@@ -9,7 +9,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
 from languages import display_language_name
 
 MENU_TRANSLATE = "Translate Now"
-MENU_TRAVEL = "Travel Mode"
 MENU_SETTINGS = "Preferences"
 MENU_HELP = "Help"
 
@@ -19,14 +18,12 @@ TR_SWAP = "Swap"
 TR_BACK_MENU = "Menu"
 TR_AGAIN = "New Translation"
 TR_HELP = "Guide"
-TR_TRAVEL = "Travel Mode"
 
 SET_PICK_SOURCE = "Default From"
 SET_PICK_TARGET = "Default To"
 SET_BACK_MENU = "Menu"
 
 LANGUAGE_MENU_BACK = "Back"
-TRAVEL_BACK = "Back"
 
 CB_TRANSLATE_TTS = "tr:tts"
 CB_ONBOARD_START = "ob:start"
@@ -35,7 +32,7 @@ CB_ONBOARD_SETTINGS = "ob:settings"
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     keyboard = [
-        [KeyboardButton(MENU_TRANSLATE), KeyboardButton(MENU_TRAVEL)],
+        [KeyboardButton(MENU_TRANSLATE)],
         [KeyboardButton(MENU_SETTINGS), KeyboardButton(MENU_HELP)],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -51,7 +48,6 @@ def translation_panel_keyboard(
     keyboard = [
         [KeyboardButton(TR_PICK_SOURCE), KeyboardButton(TR_PICK_TARGET)],
         [KeyboardButton(TR_SWAP), KeyboardButton(TR_HELP)],
-        [KeyboardButton(TR_TRAVEL)],
         [KeyboardButton(TR_BACK_MENU)],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -75,20 +71,6 @@ def settings_keyboard(
         [KeyboardButton(SET_PICK_SOURCE), KeyboardButton(SET_PICK_TARGET)],
         [KeyboardButton(SET_BACK_MENU)],
     ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)
-
-
-def travel_categories_keyboard(categories: Dict[str, str], per_row: int = 2) -> ReplyKeyboardMarkup:
-    keyboard = []
-    row = []
-    for key, label in categories.items():
-        row.append(KeyboardButton(label))
-        if len(row) == per_row:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-    keyboard.append([KeyboardButton(TRAVEL_BACK)])
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)
 
 

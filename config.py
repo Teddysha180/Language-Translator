@@ -32,15 +32,13 @@ WELCOME_TEXT = (
 
 HELP_TEXT = (
     "How to use the translator\n\n"
-    "1. Send a word, sentence, paragraph, or voice note.\n"
+    "1. Send a word, sentence, paragraph, photo, or voice note.\n"
     "2. Use From or To to change the language pair.\n"
     "3. Tap Swap to reverse the translation direction.\n"
-    "4. Open Travel Mode for ready-made phrases for food, transport, hotels, and emergencies.\n"
-    "5. Tap Speak Result when audio is available for the selected target language.\n\n"
+    "4. Tap Speak Result when audio is available for the selected target language.\n\n"
     "Commands:\n"
     "/start - open the translator\n"
     "/translate - open translation mode\n"
-    "/travel - open travel phrase mode\n"
     "/settings - update your default languages\n"
     "/help - show this guide\n"
     "/cancel - return to the main menu\n\n"

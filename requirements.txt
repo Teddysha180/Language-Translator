@@ -4,3 +4,5 @@ python-dotenv==1.0.1
 gTTS==2.5.4
 SpeechRecognition==3.10.4
 pydub==0.25.1
+Pillow==11.2.1
+pytesseract==0.3.13
