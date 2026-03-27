@@ -52,6 +52,7 @@ from keyboards import (
     MENU_HELP,
     MENU_SETTINGS,
     MENU_TRANSLATE,
+    MENU_TRAVEL,
     SET_BACK_MENU,
     SET_PICK_SOURCE,
     SET_PICK_TARGET,
@@ -61,15 +62,19 @@ from keyboards import (
     TR_PICK_SOURCE,
     TR_PICK_TARGET,
     TR_SWAP,
+    TR_TRAVEL,
+    TRAVEL_BACK,
     language_menu_keyboard,
     language_menu_label,
     main_menu_keyboard,
     onboarding_keyboard,
     settings_keyboard,
+    travel_categories_keyboard,
     translation_panel_keyboard,
     translation_result_inline_keyboard,
 )
 from languages import ALL_LANGUAGES, TRANSLATOR_CODE_ALIASES, display_language_name
+from travel_phrases import TRAVEL_CATEGORIES, TRAVEL_PHRASES
 
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
@@ -79,6 +84,7 @@ logger = logging.getLogger(__name__)
 
 TRANSLATE_STATE = 1
 SETTINGS_STATE = 2
+TRAVEL_STATE = 3
 
 db = Database(DB_PATH)
 
@@ -411,6 +417,8 @@ async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     text = (update.effective_message.text or "").strip()
     if text == MENU_TRANSLATE:
         return await translate_entry(update, context)
+    if text == MENU_TRAVEL:
+        return await travel_entry(update, context)
     if text == MENU_SETTINGS:
         return await settings_entry(update, context)
     if text == MENU_HELP:
@@ -434,6 +442,85 @@ async def settings_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     source, target = ensure_user_data_langs(context, user_id)
     db.update_user_preferences(user_id, source_lang=source, target_lang=target)
     return await show_settings_overview(update, user_id)
+
+
+async def show_travel_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    _, target = ensure_user_data_langs(context, user_id)
+    await send_markdown(
+        update,
+        (
+            "*Travel Mode*\n\n"
+            f"*Target language:* {escape_markdown(ui_lang_name(target), version=1)}\n\n"
+            "Choose a category and the bot will send a ready-to-use phrase pack."
+        ),
+        travel_categories_keyboard(TRAVEL_CATEGORIES),
+    )
+    return TRAVEL_STATE
+
+
+async def travel_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await register_user(update)
+    context.user_data.pop("lang_menu_mode", None)
+    return await show_travel_prompt(update, context)
+
+
+async def translate_travel_phrases(target_lang: str, category_key: str) -> list[tuple[str, str]]:
+    phrases = TRAVEL_PHRASES[category_key]
+    translated_rows: list[tuple[str, str]] = []
+    for phrase in phrases:
+        if target_lang == "en":
+            translated_rows.append((phrase, phrase))
+            continue
+        translated, _ = await perform_translation(phrase, "en", target_lang)
+        translated_rows.append((phrase, translated or phrase))
+    return translated_rows
+
+
+async def travel_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await register_user(update)
+    text = (update.effective_message.text or "").strip()
+    if text == TRAVEL_BACK:
+        await send_markdown(update, WELCOME_TEXT, main_menu_keyboard())
+        return ConversationHandler.END
+
+    selected_key = None
+    for key, label in TRAVEL_CATEGORIES.items():
+        if text == label:
+            selected_key = key
+            break
+
+    if not selected_key:
+        await send_markdown(
+            update,
+            "Choose one of the travel categories from the menu.",
+            travel_categories_keyboard(TRAVEL_CATEGORIES),
+        )
+        return TRAVEL_STATE
+
+    _, target_lang = ensure_user_data_langs(context, update.effective_user.id)
+    await update.effective_chat.send_action(ChatAction.TYPING)
+    try:
+        rows = await translate_travel_phrases(target_lang, selected_key)
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Travel mode translation failed: %s", exc)
+        await send_markdown(update, "Travel phrases are unavailable right now. Please try again.")
+        return TRAVEL_STATE
+
+    lines = [
+        "*Travel Phrases*",
+        "",
+        f"*Category:* {escape_markdown(TRAVEL_CATEGORIES[selected_key], version=1)}",
+        f"*Language:* {escape_markdown(ui_lang_name(target_lang), version=1)}",
+        "",
+    ]
+    for index, (source_phrase, translated_phrase) in enumerate(rows, start=1):
+        lines.append(f"*{index}. {escape_markdown(source_phrase, version=1)}*")
+        lines.append(escape_markdown(translated_phrase, version=1))
+        lines.append("")
+
+    await send_markdown(update, "\n".join(lines).strip(), travel_categories_keyboard(TRAVEL_CATEGORIES))
+    return TRAVEL_STATE
 
 
 async def perform_translation(text: str, source_lang: str, target_lang: str) -> Tuple[str, Optional[str]]:
@@ -656,6 +743,9 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return TRANSLATE_STATE
 
+    if text == TR_TRAVEL:
+        return await travel_entry(update, context)
+
     if text == TR_SWAP:
         if source_lang == "auto":
             await send_markdown(update, "Choose a specific source language before using Swap.")
@@ -863,6 +953,17 @@ def build_application() -> Application:
         allow_reentry=True,
     )
 
+    travel_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("travel", travel_entry),
+            MessageHandler(filters.Regex(f"^{re.escape(MENU_TRAVEL)}$"), travel_entry),
+            MessageHandler(filters.Regex(f"^{re.escape(TR_TRAVEL)}$"), travel_entry),
+        ],
+        states={TRAVEL_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, travel_text_handler)]},
+        fallbacks=[CommandHandler("cancel", cancel_command)],
+        allow_reentry=True,
+    )
+
     settings_conv = ConversationHandler(
         entry_points=[
             CommandHandler("settings", settings_entry),
@@ -876,6 +977,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(translate_conv)
+    app.add_handler(travel_conv)
     app.add_handler(settings_conv)
     app.add_handler(MessageHandler(filters.VOICE, voice_translation_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_text_handler))
