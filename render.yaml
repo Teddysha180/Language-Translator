@@ -10,3 +10,5 @@ services:
         sync: false
       - key: LOG_LEVEL
         value: INFO
+      - key: OCR_SPACE_API_KEY
+        sync: false

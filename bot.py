@@ -17,6 +17,7 @@ from typing import Dict, Optional, Tuple
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import requests
 from deep_translator import GoogleTranslator
 from deep_translator.exceptions import NotValidLength, RequestError, TooManyRequests
 from telegram import InputFile, Update
@@ -117,6 +118,37 @@ TTS_FALLBACK_CODES = {
     "tr",
     "zh-CN",
     "zh-TW",
+}
+
+OCR_SPACE_LANGUAGE_HINTS = {
+    "auto": "auto",
+    "ar": "ara",
+    "bg": "bul",
+    "zh-CN": "chs",
+    "zh-TW": "cht",
+    "hr": "hrv",
+    "cs": "cze",
+    "da": "dan",
+    "nl": "dut",
+    "en": "eng",
+    "fi": "fin",
+    "fr": "fre",
+    "de": "ger",
+    "el": "gre",
+    "hu": "hun",
+    "ko": "kor",
+    "it": "ita",
+    "ja": "jpn",
+    "pl": "pol",
+    "pt": "por",
+    "ru": "rus",
+    "sl": "slv",
+    "es": "spa",
+    "sv": "swe",
+    "th": "tha",
+    "tr": "tur",
+    "uk": "ukr",
+    "vi": "vnm",
 }
 
 
@@ -294,6 +326,14 @@ def resolve_tts_code(code: str) -> Optional[str]:
         if candidate in supported:
             return candidate
     return None
+
+
+def resolve_ocr_space_language(code: str) -> str:
+    aliases = [code, *TRANSLATOR_CODE_ALIASES.get(code, [])]
+    for candidate in aliases:
+        if candidate in OCR_SPACE_LANGUAGE_HINTS:
+            return OCR_SPACE_LANGUAGE_HINTS[candidate]
+    return "auto"
 
 
 async def register_user(update: Update) -> None:
@@ -524,12 +564,6 @@ async def extract_text_from_image(update: Update, context: ContextTypes.DEFAULT_
     if not message:
         raise RuntimeError("No image was found.")
 
-    try:
-        import pytesseract
-        from PIL import Image
-    except ImportError as exc:
-        raise RuntimeError("Image translation packages are not installed.") from exc
-
     telegram_file = None
     if message.photo:
         telegram_file = await context.bot.get_file(message.photo[-1].file_id)
@@ -541,17 +575,52 @@ async def extract_text_from_image(update: Update, context: ContextTypes.DEFAULT_
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as image_file:
         image_path = image_file.name
 
+    source_lang, _ = ensure_user_data_langs(context, update.effective_user.id)
+    ocr_space_api_key = os.getenv("OCR_SPACE_API_KEY", "").strip()
+
     try:
         await telegram_file.download_to_drive(custom_path=image_path)
 
-        def _ocr() -> str:
+        def _ocr_with_tesseract() -> str:
+            import pytesseract
+            from PIL import Image
+
             with Image.open(image_path) as image:
                 cleaned = image.convert("L")
                 return pytesseract.image_to_string(cleaned).strip()
 
-        extracted_text = await asyncio.to_thread(_ocr)
-    except pytesseract.TesseractNotFoundError as exc:
-        raise RuntimeError("Image translation needs Tesseract OCR installed on the server.") from exc
+        def _ocr_with_ocr_space() -> str:
+            with open(image_path, "rb") as image_file:
+                response = requests.post(
+                    "https://api.ocr.space/parse/image",
+                    headers={"apikey": ocr_space_api_key},
+                    files={"file": image_file},
+                    data={
+                        "language": resolve_ocr_space_language(source_lang),
+                        "isOverlayRequired": "false",
+                        "OCREngine": "2",
+                    },
+                    timeout=45,
+                )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("IsErroredOnProcessing"):
+                message_text = payload.get("ErrorMessage") or ["OCR processing failed."]
+                raise RuntimeError(", ".join(message_text))
+            parsed = payload.get("ParsedResults") or []
+            extracted = "\n".join((item.get("ParsedText") or "").strip() for item in parsed).strip()
+            return extracted
+
+        try:
+            extracted_text = await asyncio.to_thread(_ocr_with_tesseract)
+        except ImportError:
+            extracted_text = ""
+        except Exception as exc:
+            logger.warning("Local OCR failed: %s", exc)
+            extracted_text = ""
+
+        if not extracted_text and ocr_space_api_key:
+            extracted_text = await asyncio.to_thread(_ocr_with_ocr_space)
     finally:
         try:
             os.remove(image_path)
@@ -559,7 +628,11 @@ async def extract_text_from_image(update: Update, context: ContextTypes.DEFAULT_
             pass
 
     if not extracted_text:
-        raise RuntimeError("I could not detect readable text in that image.")
+        if ocr_space_api_key:
+            raise RuntimeError("I could not detect readable text in that image.")
+        raise RuntimeError(
+            "Image translation needs Tesseract OCR on the server or an OCR_SPACE_API_KEY in Render."
+        )
 
     return extracted_text
 
