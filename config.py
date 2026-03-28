@@ -25,19 +25,19 @@ TRANSLATION_HISTORY_LIMIT = 10
 SAVED_TRANSLATIONS_LIMIT = 20
 
 WELCOME_TEXT = (
-    "Professional translation, ready whenever you are.\n\n"
-    "Send a message and the bot will translate it right away.\n"
-    "Open Preferences if you want to change your default languages."
+    "Language Studio is ready.\n\n"
+    "Drop in text, a photo, or a voice note and get a translation right away.\n"
+    "Use Tune Languages when you want to change your default pair."
 )
 
 HELP_TEXT = (
-    "How to use the translator\n\n"
-    "1. Send a word, sentence, paragraph, photo, or voice note.\n"
-    "2. Use From or To to change the language pair.\n"
-    "3. Tap Swap to reverse the translation direction.\n"
-    "4. Tap Speak Result when audio is available for the selected target language.\n\n"
+    "Quick Guide\n\n"
+    "1. Send text, a photo, or a voice note.\n"
+    "2. Use Source or Target to change the language pair.\n"
+    "3. Use Flip Pair to reverse the direction.\n"
+    "4. Tap Speak when audio is available for the selected target language.\n\n"
     "Commands:\n"
-    "/start - open the translator\n"
+    "/start - open Language Studio\n"
     "/translate - open translation mode\n"
     "/settings - update your default languages\n"
     "/help - show this guide\n"

@@ -383,10 +383,10 @@ async def show_onboarding_if_needed(update: Update, user_id: int) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(
             (
-                "Welcome to your translation workspace.\n\n"
-                "1. Send text, a photo, or a voice note at any time.\n"
-                "2. Change From or To whenever you need a new language pair.\n"
-                "3. Use Speak Result when voice playback is supported."
+                "Welcome to Language Studio.\n\n"
+                "1. Drop in text, a photo, or a voice note.\n"
+                "2. Shape the pair with Source and Target.\n"
+                "3. Tap Speak when voice playback is available."
             ),
             reply_markup=onboarding_keyboard(),
         )
@@ -401,10 +401,9 @@ async def show_translate_prompt(update: Update, context: ContextTypes.DEFAULT_TY
     await send_markdown(
         update,
         (
-            "*Translation Studio*\n\n"
-            f"*From:* {src_name}\n"
-            f"*To:* {tgt_name}\n\n"
-            "Send text, a photo, or a voice note and the bot will translate it immediately."
+            "*Language Studio*\n\n"
+            f"`{src_name} -> {tgt_name}`\n\n"
+            "Send text, a photo, or a voice note to translate instantly."
         ),
         reply_markup=translation_panel_keyboard(source, target),
     )
@@ -416,9 +415,9 @@ async def show_settings_overview(update: Update, user_id: int) -> int:
     await send_markdown(
         update,
         (
-            "*Preferences*\n\n"
-            f"*Default from:* {escape_markdown(ui_lang_name(source), version=1)}\n"
-            f"*Default to:* {escape_markdown(ui_lang_name(target), version=1)}"
+            "*Language Pair*\n\n"
+            f"*Default source:* {escape_markdown(ui_lang_name(source), version=1)}\n"
+            f"*Default target:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
         settings_keyboard(source, target),
     )
@@ -670,13 +669,13 @@ async def send_translation_result(
         detected_line = f"<b>Detected:</b> {html.escape(ui_lang_name(detected_lang))}\n"
 
     result_text = (
-        "<b>Translation Ready</b>\n\n"
+        "<b>Studio Result</b>\n\n"
         f"{detected_line}"
         f"<b>From:</b> {html.escape(ui_lang_name(source_lang))}\n"
         f"<b>To:</b> {html.escape(ui_lang_name(target_lang))}\n\n"
-        "<b>Original text</b>\n"
+        "<b>Source</b>\n"
         f"<code>{html.escape(text[:700])}</code>\n\n"
-        "<b>Translated text</b>\n"
+        "<b>Output</b>\n"
         f"<code>{html.escape(translated[:700])}</code>"
     )
     result_actions = translation_result_inline_keyboard()
@@ -921,9 +920,9 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     await send_markdown(
         update,
         (
-            "*Preferences Updated*\n\n"
-            f"*Default from:* {escape_markdown(ui_lang_name(source), version=1)}\n"
-            f"*Default to:* {escape_markdown(ui_lang_name(target), version=1)}"
+            "*Pair Updated*\n\n"
+            f"*Default source:* {escape_markdown(ui_lang_name(source), version=1)}\n"
+            f"*Default target:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
         settings_keyboard(source, target),
     )
