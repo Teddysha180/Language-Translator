@@ -1036,6 +1036,20 @@ async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     if text == MENU_HELP:
         await help_command(update, context)
         return None
+    if (
+        text.startswith(f"{TR_PICK_SOURCE} ")
+        or text.startswith(f"{TR_PICK_TARGET} ")
+        or text == TR_SWAP
+        or text == TR_BACK_MENU
+        or text == TR_AGAIN
+    ):
+        return await translate_text_handler(update, context)
+    if (
+        text.startswith(f"{SET_PICK_SOURCE} ")
+        or text.startswith(f"{SET_PICK_TARGET} ")
+        or text == SET_BACK_MENU
+    ):
+        return await settings_text_handler(update, context)
     if text:
         await run_translation_flow(update, context, text)
     return None
