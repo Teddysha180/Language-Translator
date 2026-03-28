@@ -58,7 +58,6 @@ from keyboards import (
     SET_PICK_TARGET,
     TR_AGAIN,
     TR_BACK_MENU,
-    TR_HELP,
     TR_PICK_SOURCE,
     TR_PICK_TARGET,
     TR_SWAP,
@@ -756,7 +755,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data.pop("lang_menu_mode", None)
         return await show_translate_prompt(update, context)
 
-    if text.startswith(f"{TR_PICK_SOURCE}:"):
+    if text == TR_PICK_SOURCE:
         context.user_data["lang_menu_mode"] = "tr_src"
         await send_markdown(
             update,
@@ -765,7 +764,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return TRANSLATE_STATE
 
-    if text.startswith(f"{TR_PICK_TARGET}:"):
+    if text == TR_PICK_TARGET:
         context.user_data["lang_menu_mode"] = "tr_tgt"
         await send_markdown(
             update,
@@ -783,19 +782,6 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     if text == TR_AGAIN:
         return await show_translate_prompt(update, context)
-
-    if text == TR_HELP:
-        await send_markdown(
-            update,
-            (
-                "*Tips*\n\n"
-                "Send text directly and translation starts right away.\n"
-                "Voice notes also work when speech tools are installed.\n"
-                "Use Speak Result when audio is available for the target language."
-            ),
-            translation_panel_keyboard(source_lang, target_lang),
-        )
-        return TRANSLATE_STATE
 
     if text == TR_BACK_MENU:
         context.user_data.pop("lang_menu_mode", None)
@@ -886,7 +872,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     menu_mode = context.user_data.get("lang_menu_mode")
 
     if menu_mode not in {"set_src", "set_tgt"}:
-        if text.startswith(f"{SET_PICK_SOURCE}:"):
+        if text == SET_PICK_SOURCE:
             context.user_data["lang_menu_mode"] = "set_src"
             await send_markdown(
                 update,
@@ -894,7 +880,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 language_menu_keyboard(selectable_languages(include_auto=True), include_auto=True),
             )
             return SETTINGS_STATE
-        if text.startswith(f"{SET_PICK_TARGET}:"):
+        if text == SET_PICK_TARGET:
             context.user_data["lang_menu_mode"] = "set_tgt"
             await send_markdown(
                 update,
