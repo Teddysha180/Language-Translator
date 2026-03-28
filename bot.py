@@ -44,6 +44,8 @@ from config import (
     LOG_LEVEL,
     MAX_INPUT_TEXT_LENGTH,
     PRIMARY_ADMIN_ID,
+    REQUIRED_CHANNEL_URL,
+    REQUIRED_CHANNEL_USERNAME,
     WELCOME_TEXT,
 )
 from database import Database
@@ -59,6 +61,7 @@ from keyboards import (
     CB_ADMIN_DASHBOARD,
     CB_ADMIN_REMOVE_ADMIN,
     CB_ADMIN_STATUS,
+    CB_JOIN_CHECK,
     CB_ONBOARD_SETTINGS,
     CB_ONBOARD_START,
     CB_TRANSLATE_TTS,
@@ -76,6 +79,7 @@ from keyboards import (
     TR_SWAP,
     admin_broadcast_builder_keyboard,
     admin_panel_keyboard,
+    join_required_keyboard,
     language_menu_keyboard,
     language_menu_label,
     main_menu_keyboard,
@@ -354,6 +358,39 @@ def resolve_ocr_space_language(code: str) -> str:
 
 def is_admin_user(user_id: Optional[int]) -> bool:
     return bool(user_id) and db.is_admin(int(user_id))
+
+
+async def is_required_channel_member(context: ContextTypes.DEFAULT_TYPE, user_id: Optional[int]) -> bool:
+    if not user_id or is_admin_user(user_id):
+        return True
+    try:
+        member = await context.bot.get_chat_member(REQUIRED_CHANNEL_USERNAME, int(user_id))
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Channel membership check failed for %s: %s", user_id, exc)
+        return False
+
+    if member.status in {"member", "administrator", "creator"}:
+        return True
+    if member.status == "restricted" and getattr(member, "is_member", False):
+        return True
+    return False
+
+
+async def enforce_required_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id if update.effective_user else None
+    if await is_required_channel_member(context, user_id):
+        return True
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            (
+                "*Join Required*\n\n"
+                "Please join our channel first to use this bot.\n"
+                "After joining, tap *I Joined* to continue."
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=join_required_keyboard(REQUIRED_CHANNEL_URL),
+        )
+    return False
 
 
 async def deny_admin_access(update: Update) -> None:
@@ -678,6 +715,8 @@ async def show_settings_overview(update: Update, user_id: int) -> int:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return ConversationHandler.END
     context.user_data.pop("lang_menu_mode", None)
     await animate_start_intro(update)
     await show_onboarding_if_needed(update, update.effective_user.id)
@@ -686,6 +725,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return
     await send_markdown(update, HELP_TEXT, main_menu_keyboard(), parse_mode=ParseMode.MARKDOWN)
 
 
@@ -900,6 +941,27 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+async def handle_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if not query:
+        return
+    await register_user(update)
+    await query.answer()
+    if await is_required_channel_member(context, update.effective_user.id if update.effective_user else None):
+        await query.message.reply_text("Access granted. You can use the bot now.")
+        await show_translate_prompt(update, context)
+        return
+    await query.message.reply_text(
+        (
+            "*Join Required*\n\n"
+            "We still could not verify your channel membership.\n"
+            "Please join the channel first, then tap *I Joined* again."
+        ),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=join_required_keyboard(REQUIRED_CHANNEL_URL),
+    )
+
+
 async def admin_broadcast_draft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id if update.effective_user else None
     if not is_admin_user(user_id):
@@ -962,6 +1024,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return None
     if await admin_broadcast_draft_handler(update, context):
         return None
     text = (update.effective_message.text or "").strip()
@@ -979,12 +1043,16 @@ async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def translate_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return ConversationHandler.END
     context.user_data.pop("lang_menu_mode", None)
     return await show_translate_prompt(update, context)
 
 
 async def settings_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return ConversationHandler.END
     context.user_data.pop("lang_menu_mode", None)
     user_id = update.effective_user.id
     source, target = ensure_user_data_langs(context, user_id)
@@ -1241,6 +1309,8 @@ async def run_translation_flow(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return TRANSLATE_STATE
     if await admin_broadcast_draft_handler(update, context):
         return TRANSLATE_STATE
     user_id = update.effective_user.id
@@ -1312,6 +1382,8 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def voice_translation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return TRANSLATE_STATE
     if await admin_broadcast_draft_handler(update, context):
         return TRANSLATE_STATE
     source_lang, _ = ensure_user_data_langs(context, update.effective_user.id)
@@ -1332,6 +1404,8 @@ async def voice_translation_handler(update: Update, context: ContextTypes.DEFAUL
 
 async def image_translation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return TRANSLATE_STATE
     if await admin_broadcast_draft_handler(update, context):
         return TRANSLATE_STATE
     await update.effective_chat.send_action(ChatAction.TYPING)
@@ -1390,6 +1464,8 @@ async def handle_translate_callback(update: Update, context: ContextTypes.DEFAUL
 
 async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if not await enforce_required_membership(update, context):
+        return SETTINGS_STATE
     if await admin_broadcast_draft_handler(update, context):
         return SETTINGS_STATE
     user_id = update.effective_user.id
@@ -1520,6 +1596,7 @@ def build_application() -> Application:
     )
 
     app.add_handler(CallbackQueryHandler(handle_admin_callback, pattern=r"^admin:"))
+    app.add_handler(CallbackQueryHandler(handle_join_callback, pattern=r"^join:"))
     app.add_handler(CommandHandler("admin", admin_dashboard_command))
     app.add_handler(CommandHandler("botstatus", bot_status_command))
     app.add_handler(CommandHandler("admins", list_admins_command))

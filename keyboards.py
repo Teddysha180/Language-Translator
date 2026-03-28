@@ -27,6 +27,7 @@ LANGUAGE_MENU_BACK = "Back"
 CB_TRANSLATE_TTS = "tr:tts"
 CB_ONBOARD_START = "ob:start"
 CB_ONBOARD_SETTINGS = "ob:settings"
+CB_JOIN_CHECK = "join:check"
 CB_ADMIN_DASHBOARD = "admin:dashboard"
 CB_ADMIN_STATUS = "admin:status"
 CB_ADMIN_ADMINS = "admin:admins"
@@ -90,6 +91,14 @@ def onboarding_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("Start Translating", callback_data=CB_ONBOARD_START)],
         [InlineKeyboardButton("Choose Languages", callback_data=CB_ONBOARD_SETTINGS)],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def join_required_keyboard(channel_url: str) -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton("Join Channel", url=channel_url)],
+        [InlineKeyboardButton("I Joined", callback_data=CB_JOIN_CHECK)],
     ]
     return InlineKeyboardMarkup(keyboard)
 

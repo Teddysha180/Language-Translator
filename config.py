@@ -16,6 +16,8 @@ DB_PATH = BASE_DIR / "translator_bot.db"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 PRIMARY_ADMIN_ID = 7852430043
+REQUIRED_CHANNEL_USERNAME = "@arts_of_drawings"
+REQUIRED_CHANNEL_URL = "https://t.me/arts_of_drawings"
 
 # Bot behavior defaults.
 DEFAULT_SOURCE_LANG = "auto"
