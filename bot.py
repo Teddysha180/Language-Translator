@@ -1107,21 +1107,11 @@ async def build_tts_audio_bytes(text: str, target_lang: str) -> io.BytesIO:
         raise RuntimeError(f"Speak Result is not available for {lang_name(target_lang)} yet.")
 
     def _synthesize() -> io.BytesIO:
-        params = urlencode(
-            {
-                "ie": "UTF-8",
-                "client": "tw-ob",
-                "tl": speech_lang,
-                "q": text[:800],
-            }
-        )
-        request = Request(
-            f"https://translate.google.com/translate_tts?{params}",
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urlopen(request, timeout=20) as response:
-            audio_content = response.read()
-        buffer = io.BytesIO(audio_content)
+        from gtts import gTTS
+
+        buffer = io.BytesIO()
+        tts = gTTS(text=text[:800], lang=speech_lang)
+        tts.write_to_fp(buffer)
         buffer.seek(0)
         return buffer
 
