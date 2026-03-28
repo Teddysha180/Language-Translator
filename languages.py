@@ -197,3 +197,10 @@ def compact_language_name(code: str) -> str:
     if native_name:
         return f"{language_flag(code)} {primary_name} {native_name}"
     return f"{language_flag(code)} {primary_name}"
+
+
+def button_language_name(code: str) -> str:
+    name = ALL_LANGUAGES.get(code, code)
+    if " (" in name and name.endswith(")"):
+        name = name[:-1].split(" (", 1)[0]
+    return f"{language_flag(code)} {name}"

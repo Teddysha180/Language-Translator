@@ -6,22 +6,22 @@ from typing import Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
-from languages import compact_language_name
+from languages import button_language_name, compact_language_name
 
-MENU_TRANSLATE = "Translate Now"
-MENU_SETTINGS = "Preferences"
-MENU_HELP = "Help"
+MENU_TRANSLATE = "Start Translating"
+MENU_SETTINGS = "Language Setup"
+MENU_HELP = "How It Works"
 
 TR_PICK_SOURCE = "From"
 TR_PICK_TARGET = "To"
-TR_SWAP = "Swap"
-TR_BACK_MENU = "Menu"
+TR_SWAP = "Swap Languages"
+TR_BACK_MENU = "Back to Home"
 TR_AGAIN = "New Translation"
-TR_HELP = "Guide"
+TR_HELP = "Quick Tips"
 
 SET_PICK_SOURCE = "Default From"
 SET_PICK_TARGET = "Default To"
-SET_BACK_MENU = "Menu"
+SET_BACK_MENU = "Back to Home"
 
 LANGUAGE_MENU_BACK = "Back"
 
@@ -44,9 +44,11 @@ def translation_panel_keyboard(
     source_name: str = "",
     target_name: str = "",
 ) -> ReplyKeyboardMarkup:
-    _ = (source_lang, target_lang, source_name, target_name)
+    source_label = source_name or button_language_name(source_lang)
+    target_label = target_name or button_language_name(target_lang)
     keyboard = [
-        [KeyboardButton(TR_PICK_SOURCE), KeyboardButton(TR_PICK_TARGET)],
+        [KeyboardButton(f"From: {source_label}")],
+        [KeyboardButton(f"To: {target_label}")],
         [KeyboardButton(TR_SWAP), KeyboardButton(TR_HELP)],
         [KeyboardButton(TR_BACK_MENU)],
     ]
@@ -66,9 +68,11 @@ def settings_keyboard(
     source_name: str = "",
     target_name: str = "",
 ) -> ReplyKeyboardMarkup:
-    _ = (source_lang, target_lang, source_name, target_name)
+    source_label = source_name or button_language_name(source_lang)
+    target_label = target_name or button_language_name(target_lang)
     keyboard = [
-        [KeyboardButton(SET_PICK_SOURCE), KeyboardButton(SET_PICK_TARGET)],
+        [KeyboardButton(f"Default From: {source_label}")],
+        [KeyboardButton(f"Default To: {target_label}")],
         [KeyboardButton(SET_BACK_MENU)],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)

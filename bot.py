@@ -756,7 +756,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data.pop("lang_menu_mode", None)
         return await show_translate_prompt(update, context)
 
-    if text == TR_PICK_SOURCE:
+    if text.startswith(f"{TR_PICK_SOURCE}:"):
         context.user_data["lang_menu_mode"] = "tr_src"
         await send_markdown(
             update,
@@ -765,7 +765,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return TRANSLATE_STATE
 
-    if text == TR_PICK_TARGET:
+    if text.startswith(f"{TR_PICK_TARGET}:"):
         context.user_data["lang_menu_mode"] = "tr_tgt"
         await send_markdown(
             update,
@@ -836,7 +836,6 @@ async def image_translation_handler(update: Update, context: ContextTypes.DEFAUL
         await update.effective_message.reply_text("I could not read that image. Please try a clearer one.")
         return TRANSLATE_STATE
 
-    await update.effective_message.reply_text(f"Detected text:\n{extracted_text[:1500]}")
     return await run_translation_flow(update, context, extracted_text)
 
 
@@ -887,7 +886,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     menu_mode = context.user_data.get("lang_menu_mode")
 
     if menu_mode not in {"set_src", "set_tgt"}:
-        if text == SET_PICK_SOURCE:
+        if text.startswith(f"{SET_PICK_SOURCE}:"):
             context.user_data["lang_menu_mode"] = "set_src"
             await send_markdown(
                 update,
@@ -895,7 +894,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 language_menu_keyboard(selectable_languages(include_auto=True), include_auto=True),
             )
             return SETTINGS_STATE
-        if text == SET_PICK_TARGET:
+        if text.startswith(f"{SET_PICK_TARGET}:"):
             context.user_data["lang_menu_mode"] = "set_tgt"
             await send_markdown(
                 update,
