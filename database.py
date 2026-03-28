@@ -38,6 +38,15 @@ class Database:
             )
             cursor.execute(
                 """
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id INTEGER PRIMARY KEY,
+                    added_by INTEGER,
+                    added_date DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS translation_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
@@ -69,6 +78,84 @@ class Database:
             if "onboarding_completed" not in user_columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN onboarding_completed INTEGER DEFAULT 0")
             conn.commit()
+
+    def ensure_admin(self, user_id: int, added_by: Optional[int] = None) -> None:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO admins (user_id, added_by)
+                VALUES (?, ?)
+                """,
+                (user_id, added_by),
+            )
+            conn.commit()
+
+    def remove_admin(self, user_id: int) -> None:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+            conn.commit()
+
+    def is_admin(self, user_id: int) -> bool:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+            return cursor.fetchone() is not None
+
+    def list_admin_ids(self) -> List[int]:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM admins ORDER BY added_date ASC")
+            return [int(row["user_id"]) for row in cursor.fetchall()]
+
+    def get_user_count(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) AS total FROM users")
+            row = cursor.fetchone()
+            return int(row["total"]) if row else 0
+
+    def get_translation_count(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) AS total FROM translation_history")
+            row = cursor.fetchone()
+            return int(row["total"]) if row else 0
+
+    def get_new_user_count(self, days: int) -> int:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM users
+                WHERE joined_date >= datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            )
+            row = cursor.fetchone()
+            return int(row["total"]) if row else 0
+
+    def get_recent_translation_count(self, days: int) -> int:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM translation_history
+                WHERE timestamp >= datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            )
+            row = cursor.fetchone()
+            return int(row["total"]) if row else 0
+
+    def get_all_user_ids(self) -> List[int]:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM users ORDER BY joined_date ASC")
+            return [int(row["user_id"]) for row in cursor.fetchall()]
 
     def upsert_user(
         self,

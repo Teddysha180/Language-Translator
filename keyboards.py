@@ -27,6 +27,13 @@ LANGUAGE_MENU_BACK = "Back"
 CB_TRANSLATE_TTS = "tr:tts"
 CB_ONBOARD_START = "ob:start"
 CB_ONBOARD_SETTINGS = "ob:settings"
+CB_ADMIN_DASHBOARD = "admin:dashboard"
+CB_ADMIN_STATUS = "admin:status"
+CB_ADMIN_ADMINS = "admin:admins"
+CB_ADMIN_BROADCAST = "admin:broadcast"
+CB_ADMIN_BROADCAST_POST = "admin:broadcast_post"
+CB_ADMIN_ADD_ADMIN = "admin:add_admin"
+CB_ADMIN_REMOVE_ADMIN = "admin:remove_admin"
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -80,6 +87,27 @@ def onboarding_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("Start Translating", callback_data=CB_ONBOARD_START)],
         [InlineKeyboardButton("Choose Languages", callback_data=CB_ONBOARD_SETTINGS)],
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def admin_panel_keyboard(health_url: str = "") -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton("Dashboard", callback_data=CB_ADMIN_DASHBOARD),
+            InlineKeyboardButton("Bot Status", callback_data=CB_ADMIN_STATUS),
+        ],
+        [
+            InlineKeyboardButton("Admins", callback_data=CB_ADMIN_ADMINS),
+            InlineKeyboardButton("Broadcast", callback_data=CB_ADMIN_BROADCAST),
+        ],
+        [
+            InlineKeyboardButton("Post Broadcast", callback_data=CB_ADMIN_BROADCAST_POST),
+            InlineKeyboardButton("Add Admin", callback_data=CB_ADMIN_ADD_ADMIN),
+        ],
+        [InlineKeyboardButton("Remove Admin", callback_data=CB_ADMIN_REMOVE_ADMIN)],
+    ]
+    if health_url:
+        keyboard.append([InlineKeyboardButton("Health Check", url=health_url)])
     return InlineKeyboardMarkup(keyboard)
 
 

@@ -11,6 +11,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, Optional, Tuple
@@ -20,7 +21,7 @@ from urllib.request import Request, urlopen
 import requests
 from deep_translator import GoogleTranslator
 from deep_translator.exceptions import NotValidLength, RequestError, TooManyRequests
-from telegram import InputFile, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.constants import ChatAction, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import (
@@ -42,10 +43,18 @@ from config import (
     HELP_TEXT,
     LOG_LEVEL,
     MAX_INPUT_TEXT_LENGTH,
+    PRIMARY_ADMIN_ID,
     WELCOME_TEXT,
 )
 from database import Database
 from keyboards import (
+    CB_ADMIN_ADD_ADMIN,
+    CB_ADMIN_ADMINS,
+    CB_ADMIN_BROADCAST,
+    CB_ADMIN_BROADCAST_POST,
+    CB_ADMIN_DASHBOARD,
+    CB_ADMIN_REMOVE_ADMIN,
+    CB_ADMIN_STATUS,
     CB_ONBOARD_SETTINGS,
     CB_ONBOARD_START,
     CB_TRANSLATE_TTS,
@@ -61,6 +70,7 @@ from keyboards import (
     TR_PICK_SOURCE,
     TR_PICK_TARGET,
     TR_SWAP,
+    admin_panel_keyboard,
     language_menu_keyboard,
     language_menu_label,
     main_menu_keyboard,
@@ -76,11 +86,13 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
+BOT_STARTED_AT = time.time()
 
 TRANSLATE_STATE = 1
 SETTINGS_STATE = 2
 
 db = Database(DB_PATH)
+db.ensure_admin(PRIMARY_ADMIN_ID, PRIMARY_ADMIN_ID)
 
 FORCED_UNSUPPORTED_TARGET_LANGS = {"aa", "ss", "wal", "sid", "gez", "har", "gur", "kun", "byn", "aho"}
 ALWAYS_ALLOW_TARGET_LANGS = {"ti"}
@@ -335,6 +347,156 @@ def resolve_ocr_space_language(code: str) -> str:
     return "auto"
 
 
+def is_admin_user(user_id: Optional[int]) -> bool:
+    return bool(user_id) and db.is_admin(int(user_id))
+
+
+async def deny_admin_access(update: Update) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text("This command is available to bot admins only.")
+
+
+def format_uptime() -> str:
+    total_seconds = max(0, int(time.time() - BOT_STARTED_AT))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+
+def build_admin_stats_text() -> str:
+    return (
+        "*Admin Dashboard*\n\n"
+        f"*Users:* {db.get_user_count():,}\n"
+        f"*New users today:* {db.get_new_user_count(1):,}\n"
+        f"*New users this week:* {db.get_new_user_count(7):,}\n"
+        f"*Translations:* {db.get_translation_count():,}\n"
+        f"*Translations today:* {db.get_recent_translation_count(1):,}\n"
+        f"*Translations this week:* {db.get_recent_translation_count(7):,}\n"
+        f"*Admins:* {len(db.list_admin_ids()):,}\n"
+        f"*Uptime:* {format_uptime()}\n"
+        f"*Health:* `/health` active"
+    )
+
+
+def get_public_health_url() -> str:
+    for key in ("PUBLIC_WEB_URL", "RENDER_EXTERNAL_URL", "APP_BASE_URL"):
+        value = os.getenv(key, "").strip().rstrip("/")
+        if value:
+            return f"{value}/health"
+    return ""
+
+
+def admin_panel_text(view: str) -> str:
+    if view == "status":
+        return (
+            "*Bot Status*\n\n"
+            f"*Uptime:* {format_uptime()}\n"
+            f"*Users:* {db.get_user_count():,}\n"
+            f"*Translations:* {db.get_translation_count():,}\n"
+            f"*Today:* {db.get_recent_translation_count(1):,} translations\n"
+            f"*This week:* {db.get_recent_translation_count(7):,} translations\n"
+            "*Health endpoint:* `/health`"
+        )
+    if view == "admins":
+        admins = db.list_admin_ids()
+        lines = ["*Admin List*", ""]
+        for admin_id in admins:
+            suffix = " (main admin)" if admin_id == PRIMARY_ADMIN_ID else ""
+            lines.append(f"- `{admin_id}`{suffix}")
+        return "\n".join(lines)
+    if view == "broadcast":
+        return (
+            "*Broadcast Tools*\n\n"
+            "*Text broadcast*\n"
+            "`/broadcast Your message here`\n\n"
+            "*Broadcast a post or photo with a button*\n"
+            "1. Send or reply to the promo post/photo\n"
+            "2. Reply with:\n"
+            "`/broadcast_button Button Text | https://example.com`"
+        )
+    if view == "broadcast_post":
+        return (
+            "*Post Broadcast Guide*\n\n"
+            "Reply to a text or photo message with:\n"
+            "`/broadcast_button Button Text | https://example.com`\n\n"
+            "The replied message will be sent to all users.\n"
+            "If you skip the button, use `/broadcast` for a text-only campaign."
+        )
+    if view == "add_admin":
+        return (
+            "*Add Admin*\n\n"
+            "Main admin only.\n"
+            "Use:\n"
+            "`/addadmin 123456789`"
+        )
+    if view == "remove_admin":
+        return (
+            "*Remove Admin*\n\n"
+            "Main admin only.\n"
+            "Use:\n"
+            "`/removeadmin 123456789`"
+        )
+    return (
+        f"{build_admin_stats_text()}\n\n"
+        "*Quick Actions*\n"
+        "Use the buttons below to view status, admins, or broadcast tools."
+    )
+
+
+def parse_broadcast_button_spec(raw: str) -> Tuple[Optional[str], Optional[str]]:
+    text = (raw or "").strip()
+    if not text:
+        return None, None
+    if "|" not in text:
+        return None, None
+    label, url = [part.strip() for part in text.split("|", 1)]
+    if not label or not url or not re.match(r"^https?://", url, flags=re.IGNORECASE):
+        return None, None
+    return label[:64], url
+
+
+def build_broadcast_markup(button_label: Optional[str], button_url: Optional[str]) -> Optional[InlineKeyboardMarkup]:
+    if not button_label or not button_url:
+        return None
+    return InlineKeyboardMarkup([[InlineKeyboardButton(button_label, url=button_url)]])
+
+
+async def broadcast_message_to_users(
+    context: ContextTypes.DEFAULT_TYPE,
+    user_ids: list[int],
+    text: Optional[str] = None,
+    parse_mode: Optional[str] = None,
+    photo_file_id: Optional[str] = None,
+    caption: Optional[str] = None,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+) -> Tuple[int, int]:
+    sent = 0
+    failed = 0
+    for user_id in user_ids:
+        try:
+            if photo_file_id:
+                await context.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo_file_id,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=text or "",
+                    parse_mode=parse_mode,
+                    disable_web_page_preview=False,
+                    reply_markup=reply_markup,
+                )
+            sent += 1
+        except Exception as exc:  # pragma: no cover
+            failed += 1
+            logger.warning("Broadcast failed for user %s: %s", user_id, exc)
+    return sent, failed
+
+
 async def register_user(update: Update) -> None:
     user = update.effective_user
     if not user:
@@ -436,6 +598,184 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await register_user(update)
     await send_markdown(update, HELP_TEXT, main_menu_keyboard(), parse_mode=ParseMode.MARKDOWN)
+
+
+async def admin_dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    user_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(user_id):
+        await deny_admin_access(update)
+        return
+    await send_markdown(
+        update,
+        admin_panel_text("dashboard"),
+        reply_markup=admin_panel_keyboard(get_public_health_url()),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+async def bot_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    user_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(user_id):
+        await deny_admin_access(update)
+        return
+    await send_markdown(
+        update,
+        admin_panel_text("status"),
+        reply_markup=admin_panel_keyboard(get_public_health_url()),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+async def list_admins_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    user_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(user_id):
+        await deny_admin_access(update)
+        return
+    await send_markdown(
+        update,
+        admin_panel_text("admins"),
+        reply_markup=admin_panel_keyboard(get_public_health_url()),
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+async def add_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    caller_id = update.effective_user.id if update.effective_user else None
+    if caller_id != PRIMARY_ADMIN_ID:
+        await deny_admin_access(update)
+        return
+    if not context.args:
+        await update.effective_message.reply_text("Usage: /addadmin <user_id>")
+        return
+    try:
+        new_admin_id = int(context.args[0])
+    except ValueError:
+        await update.effective_message.reply_text("Admin user_id must be a number.")
+        return
+    db.ensure_admin(new_admin_id, int(caller_id))
+    await update.effective_message.reply_text(f"Admin access granted to {new_admin_id}.")
+
+
+async def remove_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    caller_id = update.effective_user.id if update.effective_user else None
+    if caller_id != PRIMARY_ADMIN_ID:
+        await deny_admin_access(update)
+        return
+    if not context.args:
+        await update.effective_message.reply_text("Usage: /removeadmin <user_id>")
+        return
+    try:
+        admin_id = int(context.args[0])
+    except ValueError:
+        await update.effective_message.reply_text("Admin user_id must be a number.")
+        return
+    if admin_id == PRIMARY_ADMIN_ID:
+        await update.effective_message.reply_text("The main admin cannot be removed.")
+        return
+    db.remove_admin(admin_id)
+    await update.effective_message.reply_text(f"Admin access removed from {admin_id}.")
+
+
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    caller_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(caller_id):
+        await deny_admin_access(update)
+        return
+    message = " ".join(context.args).strip()
+    if not message:
+        await update.effective_message.reply_text("Usage: /broadcast <message>")
+        return
+    sent, failed = await broadcast_message_to_users(
+        context,
+        db.get_all_user_ids(),
+        text=message,
+    )
+    await update.effective_message.reply_text(f"Broadcast finished. Sent: {sent}, Failed: {failed}.")
+
+
+async def broadcast_button_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await register_user(update)
+    caller_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(caller_id):
+        await deny_admin_access(update)
+        return
+
+    reply = update.effective_message.reply_to_message if update.effective_message else None
+    if not reply:
+        await update.effective_message.reply_text(
+            "Reply to a text or photo message with /broadcast_button <label> | <url>."
+        )
+        return
+
+    button_label, button_url = parse_broadcast_button_spec(" ".join(context.args))
+    if context.args and not button_label:
+        await update.effective_message.reply_text("Button format: /broadcast_button Button Text | https://example.com")
+        return
+
+    markup = build_broadcast_markup(button_label, button_url)
+    user_ids = db.get_all_user_ids()
+    text = reply.text_html or reply.text or None
+    caption = reply.caption_html or reply.caption or None
+    parse_mode = ParseMode.HTML if (reply.text_html or reply.caption_html) else None
+
+    if reply.photo:
+        sent, failed = await broadcast_message_to_users(
+            context,
+            user_ids,
+            photo_file_id=reply.photo[-1].file_id,
+            caption=caption,
+            parse_mode=parse_mode,
+            reply_markup=markup,
+        )
+    elif text:
+        sent, failed = await broadcast_message_to_users(
+            context,
+            user_ids,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=markup,
+        )
+    else:
+        await update.effective_message.reply_text("Reply to a text or photo message to broadcast it.")
+        return
+
+    await update.effective_message.reply_text(f"Broadcast finished. Sent: {sent}, Failed: {failed}.")
+
+
+async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    if not query:
+        return
+
+    await register_user(update)
+    user_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(user_id):
+        await query.answer("Admins only.", show_alert=True)
+        return
+
+    view_map = {
+        CB_ADMIN_DASHBOARD: "dashboard",
+        CB_ADMIN_STATUS: "status",
+        CB_ADMIN_ADMINS: "admins",
+        CB_ADMIN_BROADCAST: "broadcast",
+        CB_ADMIN_BROADCAST_POST: "broadcast_post",
+        CB_ADMIN_ADD_ADMIN: "add_admin",
+        CB_ADMIN_REMOVE_ADMIN: "remove_admin",
+    }
+    view = view_map.get(query.data, "dashboard")
+    await query.answer()
+    await query.message.edit_text(
+        text=admin_panel_text(view),
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=admin_panel_keyboard(get_public_health_url()),
+        disable_web_page_preview=True,
+    )
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -994,6 +1334,14 @@ def build_application() -> Application:
         allow_reentry=True,
     )
 
+    app.add_handler(CallbackQueryHandler(handle_admin_callback, pattern=r"^admin:"))
+    app.add_handler(CommandHandler("admin", admin_dashboard_command))
+    app.add_handler(CommandHandler("botstatus", bot_status_command))
+    app.add_handler(CommandHandler("admins", list_admins_command))
+    app.add_handler(CommandHandler("addadmin", add_admin_command))
+    app.add_handler(CommandHandler("removeadmin", remove_admin_command))
+    app.add_handler(CommandHandler("broadcast", broadcast_command))
+    app.add_handler(CommandHandler("broadcast_button", broadcast_button_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(translate_conv)

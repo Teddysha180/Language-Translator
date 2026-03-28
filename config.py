@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "translator_bot.db"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+PRIMARY_ADMIN_ID = 7852430043
 
 # Bot behavior defaults.
 DEFAULT_SOURCE_LANG = "auto"
