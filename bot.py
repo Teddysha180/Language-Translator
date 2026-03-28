@@ -1029,6 +1029,16 @@ async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_T
     if await admin_broadcast_draft_handler(update, context):
         return None
     text = (update.effective_message.text or "").strip()
+    menu_mode = context.user_data.get("lang_menu_mode")
+
+    if menu_mode in {"tr_src", "tr_tgt"}:
+        return await translate_text_handler(update, context)
+    if menu_mode in {"set_src", "set_tgt"}:
+        return await settings_text_handler(update, context)
+    if text == LANGUAGE_MENU_BACK:
+        await send_markdown(update, WELCOME_TEXT, main_menu_keyboard())
+        return None
+
     if text == MENU_TRANSLATE:
         return await translate_entry(update, context)
     if text == MENU_SETTINGS:
