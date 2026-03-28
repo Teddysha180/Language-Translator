@@ -829,6 +829,38 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
+    if query.data == CB_ADMIN_BROADCAST:
+        await query.answer()
+        await query.message.reply_text(
+            (
+                "*Broadcast Builder*\n\n"
+                "This tool will guide you step by step.\n\n"
+                "Step 1: send the post you want to broadcast.\n"
+                "Step 2: add an inline button or skip it.\n"
+                "Step 3: send the campaign to all users."
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin_broadcast_builder_keyboard("await_post"),
+        )
+        return
+
+    if query.data == CB_ADMIN_BROADCAST_POST:
+        await query.answer()
+        await query.message.reply_text(
+            (
+                "*Broadcast Formats*\n\n"
+                "You can send:\n"
+                "- text\n"
+                "- photo with caption\n"
+                "- video with caption\n"
+                "- document with caption\n\n"
+                "After that, the bot will ask for the inline button."
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin_broadcast_builder_keyboard("await_post"),
+        )
+        return
+
     if query.data == CB_ADMIN_BROADCAST_SKIP_BUTTON:
         draft = context.user_data.get("admin_broadcast_draft") or {}
         draft["button_label"] = None
@@ -855,8 +887,6 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
         CB_ADMIN_DASHBOARD: "dashboard",
         CB_ADMIN_STATUS: "status",
         CB_ADMIN_ADMINS: "admins",
-        CB_ADMIN_BROADCAST: "broadcast",
-        CB_ADMIN_BROADCAST_POST: "broadcast_post",
         CB_ADMIN_ADD_ADMIN: "add_admin",
         CB_ADMIN_REMOVE_ADMIN: "remove_admin",
     }
