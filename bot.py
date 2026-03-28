@@ -51,7 +51,11 @@ from keyboards import (
     CB_ADMIN_ADD_ADMIN,
     CB_ADMIN_ADMINS,
     CB_ADMIN_BROADCAST,
+    CB_ADMIN_BROADCAST_CANCEL,
     CB_ADMIN_BROADCAST_POST,
+    CB_ADMIN_BROADCAST_SEND,
+    CB_ADMIN_BROADCAST_SKIP_BUTTON,
+    CB_ADMIN_BROADCAST_START,
     CB_ADMIN_DASHBOARD,
     CB_ADMIN_REMOVE_ADMIN,
     CB_ADMIN_STATUS,
@@ -70,6 +74,7 @@ from keyboards import (
     TR_PICK_SOURCE,
     TR_PICK_TARGET,
     TR_SWAP,
+    admin_broadcast_builder_keyboard,
     admin_panel_keyboard,
     language_menu_keyboard,
     language_menu_label,
@@ -378,6 +383,15 @@ def build_admin_stats_text() -> str:
     )
 
 
+def clear_admin_broadcast_draft(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("admin_broadcast_draft", None)
+    context.user_data.pop("admin_broadcast_step", None)
+
+
+def get_admin_broadcast_draft(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Optional[str]]:
+    return context.user_data.setdefault("admin_broadcast_draft", {})
+
+
 def get_public_health_url() -> str:
     for key in ("PUBLIC_WEB_URL", "RENDER_EXTERNAL_URL", "APP_BASE_URL"):
         value = os.getenv(key, "").strip().rstrip("/")
@@ -407,20 +421,21 @@ def admin_panel_text(view: str) -> str:
     if view == "broadcast":
         return (
             "*Broadcast Tools*\n\n"
-            "*Text broadcast*\n"
-            "`/broadcast Your message here`\n\n"
-            "*Broadcast a post or photo with a button*\n"
-            "1. Send or reply to the promo post/photo\n"
-            "2. Reply with:\n"
-            "`/broadcast_button Button Text | https://example.com`"
+            "Use the guided flow below.\n\n"
+            "1. Tap *Start Broadcast*\n"
+            "2. Send the post first\n"
+            "3. Add an inline button or skip it\n"
+            "4. Send the campaign to all users"
         )
     if view == "broadcast_post":
         return (
             "*Post Broadcast Guide*\n\n"
-            "Reply to a text or photo message with:\n"
-            "`/broadcast_button Button Text | https://example.com`\n\n"
-            "The replied message will be sent to all users.\n"
-            "If you skip the button, use `/broadcast` for a text-only campaign."
+            "Supported post formats:\n"
+            "- text\n"
+            "- photo with caption\n"
+            "- video with caption\n"
+            "- document with caption\n\n"
+            "After you send the post, the bot will ask for an optional inline button."
         )
     if view == "add_admin":
         return (
@@ -467,6 +482,8 @@ async def broadcast_message_to_users(
     text: Optional[str] = None,
     parse_mode: Optional[str] = None,
     photo_file_id: Optional[str] = None,
+    video_file_id: Optional[str] = None,
+    document_file_id: Optional[str] = None,
     caption: Optional[str] = None,
     reply_markup: Optional[InlineKeyboardMarkup] = None,
 ) -> Tuple[int, int]:
@@ -478,6 +495,22 @@ async def broadcast_message_to_users(
                 await context.bot.send_photo(
                     chat_id=user_id,
                     photo=photo_file_id,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                )
+            elif video_file_id:
+                await context.bot.send_video(
+                    chat_id=user_id,
+                    video=video_file_id,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                )
+            elif document_file_id:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=document_file_id,
                     caption=caption,
                     parse_mode=parse_mode,
                     reply_markup=reply_markup,
@@ -495,6 +528,62 @@ async def broadcast_message_to_users(
             failed += 1
             logger.warning("Broadcast failed for user %s: %s", user_id, exc)
     return sent, failed
+
+
+async def send_admin_broadcast_draft_prompt(update: Update) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            (
+                "*Broadcast Builder*\n\n"
+                "Step 1 of 2\n"
+                "Send the post you want to broadcast.\n\n"
+                "Supported formats:\n"
+                "- text\n"
+                "- photo with caption\n"
+                "- video with caption\n"
+                "- document with caption"
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin_broadcast_builder_keyboard("await_post"),
+        )
+
+
+async def send_admin_broadcast_button_prompt(update: Update) -> None:
+    if update.effective_message:
+        await update.effective_message.reply_text(
+            (
+                "*Broadcast Builder*\n\n"
+                "Step 2 of 2\n"
+                "Send the button in this format:\n"
+                "`Button Text | https://example.com`\n\n"
+                "Or tap *Skip Button* to send the post without a button."
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin_broadcast_builder_keyboard("await_button"),
+        )
+
+
+async def send_admin_broadcast_draft_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    draft = context.user_data.get("admin_broadcast_draft") or {}
+    if not draft:
+        if update.effective_message:
+            await update.effective_message.reply_text("There is no broadcast draft ready to send.")
+        return
+
+    sent, failed = await broadcast_message_to_users(
+        context,
+        db.get_all_user_ids(),
+        text=draft.get("text"),
+        parse_mode=draft.get("parse_mode"),
+        photo_file_id=draft.get("photo_file_id"),
+        video_file_id=draft.get("video_file_id"),
+        document_file_id=draft.get("document_file_id"),
+        caption=draft.get("caption"),
+        reply_markup=build_broadcast_markup(draft.get("button_label"), draft.get("button_url")),
+    )
+    clear_admin_broadcast_draft(context)
+    if update.effective_message:
+        await update.effective_message.reply_text(f"Broadcast finished. Sent: {sent}, Failed: {failed}.")
 
 
 async def register_user(update: Update) -> None:
@@ -687,16 +776,9 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not is_admin_user(caller_id):
         await deny_admin_access(update)
         return
-    message = " ".join(context.args).strip()
-    if not message:
-        await update.effective_message.reply_text("Usage: /broadcast <message>")
-        return
-    sent, failed = await broadcast_message_to_users(
-        context,
-        db.get_all_user_ids(),
-        text=message,
-    )
-    await update.effective_message.reply_text(f"Broadcast finished. Sent: {sent}, Failed: {failed}.")
+    clear_admin_broadcast_draft(context)
+    context.user_data["admin_broadcast_step"] = "await_post"
+    await send_admin_broadcast_draft_prompt(update)
 
 
 async def broadcast_button_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -706,46 +788,19 @@ async def broadcast_button_command(update: Update, context: ContextTypes.DEFAULT
         await deny_admin_access(update)
         return
 
-    reply = update.effective_message.reply_to_message if update.effective_message else None
-    if not reply:
-        await update.effective_message.reply_text(
-            "Reply to a text or photo message with /broadcast_button <label> | <url>."
-        )
+    draft = context.user_data.get("admin_broadcast_draft")
+    if not draft:
+        await update.effective_message.reply_text("Start with /broadcast or the Broadcast button in /admin.")
         return
 
     button_label, button_url = parse_broadcast_button_spec(" ".join(context.args))
-    if context.args and not button_label:
+    if not button_label:
         await update.effective_message.reply_text("Button format: /broadcast_button Button Text | https://example.com")
         return
 
-    markup = build_broadcast_markup(button_label, button_url)
-    user_ids = db.get_all_user_ids()
-    text = reply.text_html or reply.text or None
-    caption = reply.caption_html or reply.caption or None
-    parse_mode = ParseMode.HTML if (reply.text_html or reply.caption_html) else None
-
-    if reply.photo:
-        sent, failed = await broadcast_message_to_users(
-            context,
-            user_ids,
-            photo_file_id=reply.photo[-1].file_id,
-            caption=caption,
-            parse_mode=parse_mode,
-            reply_markup=markup,
-        )
-    elif text:
-        sent, failed = await broadcast_message_to_users(
-            context,
-            user_ids,
-            text=text,
-            parse_mode=parse_mode,
-            reply_markup=markup,
-        )
-    else:
-        await update.effective_message.reply_text("Reply to a text or photo message to broadcast it.")
-        return
-
-    await update.effective_message.reply_text(f"Broadcast finished. Sent: {sent}, Failed: {failed}.")
+    draft["button_label"] = button_label
+    draft["button_url"] = button_url
+    await send_admin_broadcast_draft_now(update, context)
 
 
 async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -757,6 +812,43 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = update.effective_user.id if update.effective_user else None
     if not is_admin_user(user_id):
         await query.answer("Admins only.", show_alert=True)
+        return
+
+    if query.data == CB_ADMIN_BROADCAST_START:
+        clear_admin_broadcast_draft(context)
+        context.user_data["admin_broadcast_step"] = "await_post"
+        await query.answer()
+        await query.message.reply_text(
+            (
+                "*Broadcast Builder*\n\n"
+                "Step 1 of 2\n"
+                "Send the post you want to broadcast."
+            ),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=admin_broadcast_builder_keyboard("await_post"),
+        )
+        return
+
+    if query.data == CB_ADMIN_BROADCAST_SKIP_BUTTON:
+        draft = context.user_data.get("admin_broadcast_draft") or {}
+        draft["button_label"] = None
+        draft["button_url"] = None
+        context.user_data["admin_broadcast_draft"] = draft
+        await query.answer("Button skipped.")
+        await query.message.reply_text("Sending the broadcast now...")
+        await send_admin_broadcast_draft_now(update, context)
+        return
+
+    if query.data == CB_ADMIN_BROADCAST_SEND:
+        await query.answer()
+        await query.message.reply_text("Sending the broadcast now...")
+        await send_admin_broadcast_draft_now(update, context)
+        return
+
+    if query.data == CB_ADMIN_BROADCAST_CANCEL:
+        clear_admin_broadcast_draft(context)
+        await query.answer("Broadcast cancelled.")
+        await query.message.reply_text("Broadcast draft cancelled.")
         return
 
     view_map = {
@@ -778,6 +870,59 @@ async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+async def admin_broadcast_draft_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id if update.effective_user else None
+    if not is_admin_user(user_id):
+        return False
+
+    step = context.user_data.get("admin_broadcast_step")
+    message = update.effective_message
+    if not step or not message:
+        return False
+
+    if step == "await_post":
+        draft = get_admin_broadcast_draft(context)
+        draft.clear()
+        draft["parse_mode"] = ParseMode.HTML
+
+        if message.photo:
+            draft["photo_file_id"] = message.photo[-1].file_id
+            draft["caption"] = message.caption_html or message.caption or ""
+        elif message.video:
+            draft["video_file_id"] = message.video.file_id
+            draft["caption"] = message.caption_html or message.caption or ""
+        elif message.document:
+            draft["document_file_id"] = message.document.file_id
+            draft["caption"] = message.caption_html or message.caption or ""
+        elif message.text and not message.text.startswith("/"):
+            draft["text"] = message.text_html or message.text
+        else:
+            await message.reply_text("Send a text, photo, video, or document to create the broadcast post.")
+            return True
+
+        context.user_data["admin_broadcast_step"] = "await_button"
+        await send_admin_broadcast_button_prompt(update)
+        return True
+
+    if step == "await_button":
+        if message.text and not message.text.startswith("/"):
+            button_label, button_url = parse_broadcast_button_spec(message.text)
+            if not button_label:
+                await message.reply_text(
+                    "Button format: Button Text | https://example.com\nOr tap Skip Button."
+                )
+                return True
+            draft = get_admin_broadcast_draft(context)
+            draft["button_label"] = button_label
+            draft["button_url"] = button_url
+            await send_admin_broadcast_draft_now(update, context)
+            return True
+        await message.reply_text("Send the button as: Button Text | https://example.com")
+        return True
+
+    return False
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
     context.user_data.pop("lang_menu_mode", None)
@@ -787,6 +932,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def main_menu_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
     await register_user(update)
+    if await admin_broadcast_draft_handler(update, context):
+        return None
     text = (update.effective_message.text or "").strip()
     if text == MENU_TRANSLATE:
         return await translate_entry(update, context)
@@ -1064,6 +1211,8 @@ async def run_translation_flow(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if await admin_broadcast_draft_handler(update, context):
+        return TRANSLATE_STATE
     user_id = update.effective_user.id
     text = (update.effective_message.text or "").strip()
     menu_mode = context.user_data.get("lang_menu_mode")
@@ -1133,6 +1282,8 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def voice_translation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if await admin_broadcast_draft_handler(update, context):
+        return TRANSLATE_STATE
     source_lang, _ = ensure_user_data_langs(context, update.effective_user.id)
     await update.effective_chat.send_action(ChatAction.TYPING)
     try:
@@ -1151,6 +1302,8 @@ async def voice_translation_handler(update: Update, context: ContextTypes.DEFAUL
 
 async def image_translation_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if await admin_broadcast_draft_handler(update, context):
+        return TRANSLATE_STATE
     await update.effective_chat.send_action(ChatAction.TYPING)
     try:
         extracted_text = await extract_text_from_image(update, context)
@@ -1207,6 +1360,8 @@ async def handle_translate_callback(update: Update, context: ContextTypes.DEFAUL
 
 async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await register_user(update)
+    if await admin_broadcast_draft_handler(update, context):
+        return SETTINGS_STATE
     user_id = update.effective_user.id
     text = (update.effective_message.text or "").strip()
     menu_mode = context.user_data.get("lang_menu_mode")

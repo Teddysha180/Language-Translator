@@ -34,6 +34,10 @@ CB_ADMIN_BROADCAST = "admin:broadcast"
 CB_ADMIN_BROADCAST_POST = "admin:broadcast_post"
 CB_ADMIN_ADD_ADMIN = "admin:add_admin"
 CB_ADMIN_REMOVE_ADMIN = "admin:remove_admin"
+CB_ADMIN_BROADCAST_START = "admin:broadcast_start"
+CB_ADMIN_BROADCAST_SKIP_BUTTON = "admin:broadcast_skip_button"
+CB_ADMIN_BROADCAST_SEND = "admin:broadcast_send"
+CB_ADMIN_BROADCAST_CANCEL = "admin:broadcast_cancel"
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -108,6 +112,23 @@ def admin_panel_keyboard(health_url: str = "") -> InlineKeyboardMarkup:
     ]
     if health_url:
         keyboard.append([InlineKeyboardButton("Health Check", url=health_url)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def admin_broadcast_builder_keyboard(step: str) -> InlineKeyboardMarkup:
+    if step == "await_button":
+        keyboard = [
+            [InlineKeyboardButton("Skip Button", callback_data=CB_ADMIN_BROADCAST_SKIP_BUTTON)],
+            [
+                InlineKeyboardButton("Send Broadcast", callback_data=CB_ADMIN_BROADCAST_SEND),
+                InlineKeyboardButton("Cancel", callback_data=CB_ADMIN_BROADCAST_CANCEL),
+            ],
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton("Start Broadcast", callback_data=CB_ADMIN_BROADCAST_START)],
+            [InlineKeyboardButton("Cancel", callback_data=CB_ADMIN_BROADCAST_CANCEL)],
+        ]
     return InlineKeyboardMarkup(keyboard)
 
 
