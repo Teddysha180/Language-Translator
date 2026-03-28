@@ -25,24 +25,24 @@ TRANSLATION_HISTORY_LIMIT = 10
 SAVED_TRANSLATIONS_LIMIT = 20
 
 WELCOME_TEXT = (
-    "Language Studio is ready.\n\n"
-    "Drop in text, a photo, or a voice note and get a translation right away.\n"
-    "Use Tune Languages when you want to change your default pair."
+    "Welcome to Language Studio.\n\n"
+    "Send a message, photo, or voice note to translate instantly.\n"
+    "Open Language Settings anytime to change your default languages."
 )
 
 HELP_TEXT = (
-    "Quick Guide\n\n"
+    "How To Use The Bot\n\n"
     "1. Send text, a photo, or a voice note.\n"
-    "2. Use Source or Target to change the language pair.\n"
-    "3. Use Flip Pair to reverse the direction.\n"
-    "4. Tap Speak when audio is available for the selected target language.\n\n"
+    "2. Use From and To to choose your language pair.\n"
+    "3. Tap Swap to reverse the translation direction.\n"
+    "4. Tap Speak Result when audio is available for the selected language.\n\n"
     "Commands:\n"
-    "/start - open Language Studio\n"
+    "/start - open the translator\n"
     "/translate - open translation mode\n"
     "/settings - update your default languages\n"
     "/help - show this guide\n"
-    "/cancel - return to the main menu\n\n"
-    f"Text limit: keep each message under {MAX_INPUT_TEXT_LENGTH:,} characters."
+    "/cancel - return to the home screen\n\n"
+    f"Text limit: {MAX_INPUT_TEXT_LENGTH:,} characters per message."
 )
 
 if DEFAULT_TARGET_LANG not in ALL_LANGUAGES:

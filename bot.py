@@ -384,9 +384,9 @@ async def show_onboarding_if_needed(update: Update, user_id: int) -> None:
         await update.effective_message.reply_text(
             (
                 "Welcome to Language Studio.\n\n"
-                "1. Drop in text, a photo, or a voice note.\n"
-                "2. Shape the pair with Source and Target.\n"
-                "3. Tap Speak when voice playback is available."
+                "1. Send text, a photo, or a voice note.\n"
+                "2. Choose your From and To languages anytime.\n"
+                "3. Use Speak Result when audio is available."
             ),
             reply_markup=onboarding_keyboard(),
         )
@@ -402,8 +402,9 @@ async def show_translate_prompt(update: Update, context: ContextTypes.DEFAULT_TY
         update,
         (
             "*Language Studio*\n\n"
-            f"`{src_name} -> {tgt_name}`\n\n"
-            "Send text, a photo, or a voice note to translate instantly."
+            f"*From:* {src_name}\n"
+            f"*To:* {tgt_name}\n\n"
+            "Send text, a photo, or a voice note to get started."
         ),
         reply_markup=translation_panel_keyboard(source, target),
     )
@@ -415,7 +416,7 @@ async def show_settings_overview(update: Update, user_id: int) -> int:
     await send_markdown(
         update,
         (
-            "*Language Pair*\n\n"
+            "*Language Settings*\n\n"
             f"*Default source:* {escape_markdown(ui_lang_name(source), version=1)}\n"
             f"*Default target:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
@@ -669,16 +670,16 @@ async def send_translation_result(
         detected_line = f"<b>Detected:</b> {html.escape(ui_lang_name(detected_lang))}\n"
 
     result_text = (
-        "<b>Studio Result</b>\n\n"
+        "<b>Translation Result</b>\n\n"
         f"{detected_line}"
         f"<b>From:</b> {html.escape(ui_lang_name(source_lang))}\n"
         f"<b>To:</b> {html.escape(ui_lang_name(target_lang))}\n\n"
-        "<b>Source</b>\n"
+        "<b>Original</b>\n"
         f"<code>{html.escape(text[:700])}</code>\n\n"
-        "<b>Output</b>\n"
+        "<b>Translation</b>\n"
         f"<code>{html.escape(translated[:700])}</code>"
     )
-    result_actions = translation_result_inline_keyboard()
+    result_actions = translation_result_inline_keyboard(include_tts=resolve_tts_code(target_lang) is not None)
     try:
         await send_markdown(update, result_text, result_actions, parse_mode=ParseMode.HTML)
     except BadRequest:
@@ -703,19 +704,19 @@ async def run_translation_flow(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         translated, detected_lang = await perform_translation(text, source_lang, target_lang)
     except ValueError as exc:
-        await send_markdown(update, f"Language error: {escape_markdown(str(exc), version=1)}")
+        await send_markdown(update, f"Language issue: {escape_markdown(str(exc), version=1)}")
         return TRANSLATE_STATE
     except (NotValidLength, TooManyRequests, RequestError):
-        await send_markdown(update, "Translation service is busy. Please try again in a moment.")
+        await send_markdown(update, "The translation service is busy right now. Please try again in a moment.")
         return TRANSLATE_STATE
     except Exception as exc:  # pragma: no cover
         logger.exception("Unexpected translation failure: %s", exc)
-        await send_markdown(update, "Something went wrong. Please try again.")
+        await send_markdown(update, "Something went wrong while translating. Please try again.")
         return TRANSLATE_STATE
 
     translated = translated or ""
     if is_effectively_empty_text(translated):
-        await send_markdown(update, "No result came back for that language pair. Try another target language.")
+        await send_markdown(update, "No translation result came back for that language pair. Try another target language.")
         return TRANSLATE_STATE
 
     return await send_translation_result(update, context, text, translated, source_lang, target_lang, detected_lang)
@@ -743,7 +744,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         if not picked_code:
             await send_markdown(
                 update,
-                "Please choose a language from the menu.",
+                "Please choose a language from the list below.",
                 language_menu_keyboard(choices, include_auto=(menu_mode == "tr_src")),
             )
             return TRANSLATE_STATE
@@ -758,7 +759,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["lang_menu_mode"] = "tr_src"
         await send_markdown(
             update,
-            "Choose the language you are translating from:",
+            "Choose the source language:",
             language_menu_keyboard(selectable_languages(include_auto=True), include_auto=True),
         )
         return TRANSLATE_STATE
@@ -767,7 +768,7 @@ async def translate_text_handler(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["lang_menu_mode"] = "tr_tgt"
         await send_markdown(
             update,
-            "Choose the language you are translating to:",
+            "Choose the target language:",
             language_menu_keyboard(selectable_languages(include_auto=False, for_target=True), include_auto=False),
         )
         return TRANSLATE_STATE
@@ -801,7 +802,7 @@ async def voice_translation_handler(update: Update, context: ContextTypes.DEFAUL
         return TRANSLATE_STATE
     except Exception as exc:  # pragma: no cover
         logger.exception("Voice translation failed: %s", exc)
-        await update.effective_message.reply_text("I could not process that voice note. Please try a shorter one.")
+        await update.effective_message.reply_text("I could not process that voice note. Please try another one.")
         return TRANSLATE_STATE
 
     await update.effective_message.reply_text(f"Heard:\n{transcribed_text}")
@@ -818,7 +819,7 @@ async def image_translation_handler(update: Update, context: ContextTypes.DEFAUL
         return TRANSLATE_STATE
     except Exception as exc:  # pragma: no cover
         logger.exception("Image translation failed: %s", exc)
-        await update.effective_message.reply_text("I could not read that image. Please try a clearer one.")
+        await update.effective_message.reply_text("I could not read that image clearly. Please try a sharper one.")
         return TRANSLATE_STATE
 
     return await run_translation_flow(update, context, extracted_text)
@@ -835,7 +836,7 @@ async def handle_translate_callback(update: Update, context: ContextTypes.DEFAUL
     if query.data == CB_TRANSLATE_TTS:
         last = context.user_data.get("last_translation")
         if not last:
-            await query.message.reply_text("Translate something first so I can speak it.")
+            await query.message.reply_text("Translate something first, then I can read it aloud.")
             return TRANSLATE_STATE
         try:
             audio_bytes = await build_tts_audio_bytes(last["translated_text"], last["target_lang"])
@@ -903,7 +904,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if not picked_code:
         await send_markdown(
             update,
-            "Please choose a language from the menu.",
+            "Please choose a language from the list below.",
             language_menu_keyboard(choices, include_auto=(menu_mode == "set_src")),
         )
         return SETTINGS_STATE
@@ -920,7 +921,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
     await send_markdown(
         update,
         (
-            "*Pair Updated*\n\n"
+            "*Settings Updated*\n\n"
             f"*Default source:* {escape_markdown(ui_lang_name(source), version=1)}\n"
             f"*Default target:* {escape_markdown(ui_lang_name(target), version=1)}"
         ),
@@ -932,7 +933,7 @@ async def settings_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.exception("Unhandled exception: %s", context.error)
     if isinstance(update, Update) and update.effective_message:
-        await update.effective_message.reply_text("An unexpected error happened. Please try again.")
+        await update.effective_message.reply_text("An unexpected error occurred. Please try again.")
 
 
 def start_health_server() -> None:

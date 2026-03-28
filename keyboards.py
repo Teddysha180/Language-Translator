@@ -8,9 +8,9 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
 
 from languages import button_language_chip, compact_language_name
 
-MENU_TRANSLATE = "Open Studio"
-MENU_SETTINGS = "Tune Languages"
-MENU_HELP = "Quick Guide"
+MENU_TRANSLATE = "Translate Now"
+MENU_SETTINGS = "Language Settings"
+MENU_HELP = "Help"
 
 TR_PICK_SOURCE = "From"
 TR_PICK_TARGET = "To"
@@ -18,8 +18,8 @@ TR_SWAP = "⇄ Swap"
 TR_BACK_MENU = "⌂ Home"
 TR_AGAIN = "New Translation"
 
-SET_PICK_SOURCE = "Default From"
-SET_PICK_TARGET = "Default To"
+SET_PICK_SOURCE = "Source Language"
+SET_PICK_TARGET = "Target Language"
 SET_BACK_MENU = "⌂ Home"
 
 LANGUAGE_MENU_BACK = "Back"
@@ -55,7 +55,7 @@ def translation_panel_keyboard(
 def translation_result_inline_keyboard(include_tts: bool = True) -> InlineKeyboardMarkup:
     keyboard = []
     if include_tts:
-        keyboard.append([InlineKeyboardButton("🔊 Speak", callback_data=CB_TRANSLATE_TTS)])
+        keyboard.append([InlineKeyboardButton("🔊 Speak Result", callback_data=CB_TRANSLATE_TTS)])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -78,7 +78,7 @@ def settings_keyboard(
 def onboarding_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("Start Translating", callback_data=CB_ONBOARD_START)],
-        [InlineKeyboardButton("Pick My Default Language", callback_data=CB_ONBOARD_SETTINGS)],
+        [InlineKeyboardButton("Choose Languages", callback_data=CB_ONBOARD_SETTINGS)],
     ]
     return InlineKeyboardMarkup(keyboard)
 
