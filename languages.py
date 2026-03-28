@@ -184,3 +184,45 @@ def language_flag(code: str) -> str:
 def display_language_name(code: str) -> str:
     name = ALL_LANGUAGES.get(code, code)
     return f"{language_flag(code)} {name}"
+
+
+MENU_LANGUAGE_NAMES: Dict[str, str] = {
+    "auto": "Auto Detect",
+    "am": "Amharic",
+    "om": "Oromo",
+    "ti": "Tigrinya",
+    "so": "Somali",
+    "aa": "Afar",
+    "tig": "Tigre",
+    "ss": "Silt'e",
+    "wal": "Wolaytta",
+    "sid": "Sidama",
+    "gez": "Ge'ez",
+    "har": "Harari",
+    "gur": "Gurage",
+    "gam": "Gamo",
+    "ktb": "Kambaata",
+    "dwr": "Dawuro",
+    "anu": "Anuak",
+    "nrb": "Nara",
+    "kun": "Kunama",
+    "byn": "Bilen",
+    "aho": "Hadiyya",
+    "ar": "Arabic",
+    "fr": "French",
+    "es": "Spanish",
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "tr": "Turkish",
+    "zh-CN": "Chinese",
+    "zh-TW": "Chinese Trad.",
+    "ja": "Japanese",
+    "ko": "Korean",
+}
+
+
+def compact_language_name(code: str) -> str:
+    name = MENU_LANGUAGE_NAMES.get(code, ALL_LANGUAGES.get(code, code))
+    return f"{language_flag(code)} {name}"

@@ -6,7 +6,7 @@ from typing import Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
-from languages import display_language_name
+from languages import compact_language_name
 
 MENU_TRANSLATE = "Translate Now"
 MENU_SETTINGS = "Preferences"
@@ -83,7 +83,8 @@ def onboarding_keyboard() -> InlineKeyboardMarkup:
 
 
 def language_menu_label(code: str, name: str) -> str:
-    return f"{display_language_name(code)} [{code}]"
+    _ = name
+    return compact_language_name(code)
 
 
 def language_menu_keyboard(
