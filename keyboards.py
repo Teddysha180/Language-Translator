@@ -90,7 +90,7 @@ def language_menu_label(code: str, name: str) -> str:
 def language_menu_keyboard(
     languages: Dict[str, str],
     include_auto: bool = False,
-    per_row: int = 2,
+    per_row: int = 1,
 ) -> ReplyKeyboardMarkup:
     items = [(code, name) for code, name in languages.items() if include_auto or code != "auto"]
     keyboard = []

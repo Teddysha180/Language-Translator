@@ -186,43 +186,14 @@ def display_language_name(code: str) -> str:
     return f"{language_flag(code)} {name}"
 
 
-MENU_LANGUAGE_NAMES: Dict[str, str] = {
-    "auto": "Auto Detect",
-    "am": "Amharic",
-    "om": "Oromo",
-    "ti": "Tigrinya",
-    "so": "Somali",
-    "aa": "Afar",
-    "tig": "Tigre",
-    "ss": "Silt'e",
-    "wal": "Wolaytta",
-    "sid": "Sidama",
-    "gez": "Ge'ez",
-    "har": "Harari",
-    "gur": "Gurage",
-    "gam": "Gamo",
-    "ktb": "Kambaata",
-    "dwr": "Dawuro",
-    "anu": "Anuak",
-    "nrb": "Nara",
-    "kun": "Kunama",
-    "byn": "Bilen",
-    "aho": "Hadiyya",
-    "ar": "Arabic",
-    "fr": "French",
-    "es": "Spanish",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "tr": "Turkish",
-    "zh-CN": "Chinese",
-    "zh-TW": "Chinese Trad.",
-    "ja": "Japanese",
-    "ko": "Korean",
-}
-
-
 def compact_language_name(code: str) -> str:
-    name = MENU_LANGUAGE_NAMES.get(code, ALL_LANGUAGES.get(code, code))
-    return f"{language_flag(code)} {name}"
+    name = ALL_LANGUAGES.get(code, code)
+    primary_name = name
+    native_name = ""
+
+    if " (" in name and name.endswith(")"):
+        primary_name, native_name = name[:-1].split(" (", 1)
+
+    if native_name:
+        return f"{language_flag(code)} {primary_name} {native_name}"
+    return f"{language_flag(code)} {primary_name}"
