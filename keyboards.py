@@ -6,21 +6,21 @@ from typing import Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 
-from languages import compact_language_name
+from languages import button_language_chip, compact_language_name
 
 MENU_TRANSLATE = "Open Studio"
 MENU_SETTINGS = "Tune Languages"
 MENU_HELP = "Quick Guide"
 
-TR_PICK_SOURCE = "◂ Source"
-TR_PICK_TARGET = "Target ▸"
-TR_SWAP = "⇆ Flip Pair"
-TR_BACK_MENU = "⌂ Studio"
+TR_PICK_SOURCE = "From"
+TR_PICK_TARGET = "To"
+TR_SWAP = "⇄ Swap"
+TR_BACK_MENU = "⌂ Home"
 TR_AGAIN = "New Translation"
 
-SET_PICK_SOURCE = "◂ Default Source"
-SET_PICK_TARGET = "Default Target ▸"
-SET_BACK_MENU = "⌂ Studio"
+SET_PICK_SOURCE = "Default From"
+SET_PICK_TARGET = "Default To"
+SET_BACK_MENU = "⌂ Home"
 
 LANGUAGE_MENU_BACK = "Back"
 
@@ -43,9 +43,10 @@ def translation_panel_keyboard(
     source_name: str = "",
     target_name: str = "",
 ) -> ReplyKeyboardMarkup:
-    _ = (source_lang, target_lang, source_name, target_name)
+    source_label = source_name or button_language_chip(source_lang)
+    target_label = target_name or button_language_chip(target_lang)
     keyboard = [
-        [KeyboardButton(TR_PICK_SOURCE), KeyboardButton(TR_PICK_TARGET)],
+        [KeyboardButton(f"{TR_PICK_SOURCE} {source_label}"), KeyboardButton(f"{TR_PICK_TARGET} {target_label}")],
         [KeyboardButton(TR_SWAP), KeyboardButton(TR_BACK_MENU)],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)
@@ -64,9 +65,11 @@ def settings_keyboard(
     source_name: str = "",
     target_name: str = "",
 ) -> ReplyKeyboardMarkup:
-    _ = (source_lang, target_lang, source_name, target_name)
+    source_label = source_name or button_language_chip(source_lang)
+    target_label = target_name or button_language_chip(target_lang)
     keyboard = [
-        [KeyboardButton(SET_PICK_SOURCE), KeyboardButton(SET_PICK_TARGET)],
+        [KeyboardButton(f"{SET_PICK_SOURCE} {source_label}")],
+        [KeyboardButton(f"{SET_PICK_TARGET} {target_label}")],
         [KeyboardButton(SET_BACK_MENU)],
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, one_time_keyboard=False)

@@ -204,3 +204,8 @@ def button_language_name(code: str) -> str:
     if " (" in name and name.endswith(")"):
         name = name[:-1].split(" (", 1)[0]
     return f"{language_flag(code)} {name}"
+
+
+def button_language_chip(code: str) -> str:
+    short_code = code.replace("auto", "AUTO").split("-", 1)[0].upper()
+    return f"{language_flag(code)} {short_code}"
