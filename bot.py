@@ -1300,18 +1300,33 @@ async def run_translation_flow(update: Update, context: ContextTypes.DEFAULT_TYP
         return TRANSLATE_STATE
 
     await update.effective_chat.send_action(ChatAction.TYPING)
-    try:
-        translated, detected_lang = await perform_translation(text, source_lang, target_lang)
-    except ValueError as exc:
-        await send_markdown(update, f"Language issue: {escape_markdown(str(exc), version=1)}")
-        return TRANSLATE_STATE
-    except (NotValidLength, TooManyRequests, RequestError):
-        await send_markdown(update, "The translation service is busy right now. Please try again in a moment.")
-        return TRANSLATE_STATE
-    except Exception as exc:  # pragma: no cover
-        logger.exception("Unexpected translation failure: %s", exc)
-        await send_markdown(update, "Something went wrong while translating. Please try again.")
-        return TRANSLATE_STATE
+    translated = None
+    detected_lang = None
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        try:
+            translated, detected_lang = await perform_translation(text, source_lang, target_lang)
+            break
+        except ValueError as exc:
+            await send_markdown(update, f"Language issue: {escape_markdown(str(exc), version=1)}")
+            return TRANSLATE_STATE
+        except NotValidLength:
+            await send_markdown(update, "That message is too long or invalid for the translation service. Try a shorter message.")
+            return TRANSLATE_STATE
+        except (TooManyRequests, RequestError) as exc:
+            logger.warning("Translation attempt %d failed with %s: %s", attempt, type(exc).__name__, exc)
+            if attempt == max_attempts:
+                await send_markdown(update, "The translation service is busy right now. Please try again in a moment.")
+                return TRANSLATE_STATE
+            # exponential backoff before retrying
+            backoff = 1 * (2 ** (attempt - 1))
+            await asyncio.sleep(backoff)
+            await update.effective_chat.send_action(ChatAction.TYPING)
+            continue
+        except Exception as exc:  # pragma: no cover
+            logger.exception("Unexpected translation failure: %s", exc)
+            await send_markdown(update, "Something went wrong while translating. Please try again.")
+            return TRANSLATE_STATE
 
     translated = translated or ""
     if is_effectively_empty_text(translated):
